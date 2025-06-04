@@ -1,0 +1,30 @@
+{
+  "name": "boipotro",
+  "version": "1.0.0",
+  "description": "clone of Rokomari.com",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node BackEnd/server.js",
+    "server":"nodemon backend/server.js",
+    "client": "npm run start --prefix FrontEnd",
+    "dev":"concurrently \"npm run server\" \"npm run client\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KdbAzizul/BoiPotro.git"
+  },
+  "author": "Azizul Hakim",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/KdbAzizul/BoiPotro/issues"
+  },
+  "homepage": "https://github.com/KdbAzizul/BoiPotro#readme",
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.10"
+  }
+}
