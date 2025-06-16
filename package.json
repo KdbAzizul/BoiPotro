@@ -21,7 +21,8 @@
   },
   "homepage": "https://github.com/KdbAzizul/BoiPotro#readme",
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.16.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
