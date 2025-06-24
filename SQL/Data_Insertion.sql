@@ -39,7 +39,6 @@ CREATE TABLE app_user (
 -- 6
 CREATE TABLE book (
     ID                  SERIAL PRIMARY KEY,
-    author_id           INTEGER,
     publisher_id        INTEGER,
     NAME                VARCHAR(100),
     IMAGE               VARCHAR(1000) DEFAULT 'https://st2.depositphotos.com/5703046/12114/i/950/depositphotos_121142344-stock-photo-white-book-on-white-background.jpg',
