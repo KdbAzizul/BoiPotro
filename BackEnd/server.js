@@ -4,6 +4,7 @@ dotenv.config();
 import cookieParser from 'cookie-parser';
 import productRoutes from './routes/productRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import authorRoutes from './routes/authorRoutes.js';
 
 const port=process.env.PORT || 5000;
 import pool from './db.js';
@@ -23,6 +24,7 @@ app.get('/',(req,res)=>{
 
 app.use('/api/products',productRoutes);
 app.use('/api/users',userRoutes);
+app.use('/api/authors',authorRoutes);
 
 // app.get('/api/products',(req,res)=>{
 //     res.json(products);

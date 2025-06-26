@@ -12,7 +12,7 @@ const authUser = asyncHandler(async(req,res) => {
     const{email,password}=req.body;
 
     const result=await pool.query(
-        'SELECT * FROM "BoiPotro"."app_user" WHERE EMAIL=$1',[email]
+        'SELECT * FROM "BOIPOTRO"."users" WHERE EMAIL=$1',[email]
     );
     const user = result.rows[0];
     
@@ -39,7 +39,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const { name, email, password } = req.body;
 
     const result = await pool.query(
-        'SELECT * FROM "BoiPotro"."app_user" WHERE email = $1',
+        'SELECT * FROM "BOIPOTRO"."users" WHERE email = $1',
         [email]
     );
 
@@ -52,7 +52,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const insertResult = await pool.query(
-        `INSERT INTO "BoiPotro"."app_user" (name, email, password) 
+        `INSERT INTO "BOIPOTRO"."users" (name, email, password) 
          VALUES ($1, $2, $3) 
          RETURNING id, name, email, isadmin`,
         [name, email, hashedPassword]
@@ -95,9 +95,10 @@ const logoutUser = asyncHandler(async(req,res) => {
 const getUserProfile = asyncHandler(async(req,res) => {
     
     const result=await pool.query(
-        'SELECT * FROM "BoiPotro"."app_user" WHERE ID=$1',[req.user.id]
+        'SELECT * FROM "BOIPOTRO"."users" WHERE ID=$1',[req.user.id]
     );
     const user = result.rows[0];
+  
     
 
     if(user){
@@ -120,7 +121,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(
-        'SELECT * FROM "BoiPotro"."app_user" WHERE id = $1',
+        'SELECT * FROM "BOIPOTRO"."users" WHERE id = $1',
         [userId]
     );
 
@@ -141,7 +142,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
    
     const updateResult = await pool.query(
-        `UPDATE "BoiPotro"."app_user"
+        `UPDATE "BOIPOTRO"."users"
          SET name = $1, email = $2, password = $3
          WHERE id = $4
          RETURNING id, name, email, isadmin`,

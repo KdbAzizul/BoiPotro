@@ -11,7 +11,7 @@ const protect = asyncHandler(async (req, res, next) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
             const result = await pool.query(
-                'SELECT * FROM "BoiPotro"."app_user" WHERE ID = $1',
+                'SELECT * FROM "BOIPOTRO"."users" WHERE ID = $1',
                 [decoded.userId]
             );
 

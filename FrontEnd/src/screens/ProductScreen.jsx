@@ -82,7 +82,7 @@ const ProductScreen = () => {
               </ListGroup.Item>
 
               <ListGroup.Item>Price: Tk.{product.price}</ListGroup.Item>
-              <ListGroup.Item>Description:{product.summary}</ListGroup.Item>
+              <ListGroup.Item>Description:{product.description}</ListGroup.Item>
             </ListGroup>
           </Col>
 
