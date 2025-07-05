@@ -88,10 +88,10 @@ CONSTRAINT fk_user_coupons_user FOREIGN KEY (user_id) REFERENCES users(id),
 CONSTRAINT fk_user_coupons_coupon FOREIGN KEY (coupon_id) REFERENCES coupons(id)
 );
 
+
 CREATE TABLE payments (
-id SERIAL PRIMARY KEY,
-payment_date TIMESTAMP,
-method VARCHAR(100)
+  id SERIAL PRIMARY KEY,
+  method VARCHAR(100) UNIQUE
 );
 
 CREATE TABLE cart (
@@ -117,7 +117,7 @@ CREATE TABLE cartItems (
     quantity     INTEGER DEFAULT 1,
     FOREIGN KEY (cart_id) REFERENCES cart(ID),
     FOREIGN KEY (book_id) REFERENCES books(ID),
-    CONSTRAINT picked_amount_min_max_value CHECK (quantity BETWEEN 1 AND 5)
+   
 
 );
 
@@ -292,32 +292,24 @@ INSERT INTO book_categories (book_id, category_id) VALUES
 -- Insert demo data into coupons
 INSERT INTO coupons (code, percentage_discount, amount_discount, maximum_discount, min_order_amount, valid_from, valid_until, usage_limit)
 VALUES
-('SUMMER20', 20.00, 0, 100.00, 50.00, '2025-06-01 00:00:00', '2025-06-30 23:59:59', 100),
-('FIFTYOFF', 0, 50.00, 50.00, 100.00, '2025-06-01 00:00:00', '2025-12-31 23:59:59', 50),
-('WELCOME10', 10.00, 0, 30.00, 0, '2025-01-01 00:00:00', '2025-12-31 23:59:59', NULL);
+('SUMMER20', 20.00, 0, 100.00, 50.00, '2025-06-01 00:00:00', '2026-06-30 23:59:59', 100),
+('FIFTYOFF', 0, 50.00, 50.00, 100.00, '2025-06-01 00:00:00', '2026-12-31 23:59:59', 50),
+('WELCOME10', 10.00, 0, 30.00, 0, '2025-01-01 00:00:00', '2026-12-31 23:59:59', NULL);
 
 -- Insert demo data into user_coupons with multiple coupons per user (users 1 to 10)
 INSERT INTO user_coupons (user_id, coupon_id, used_count) VALUES
-(1, 1, 0),
-(1, 3, 1),
-(2, 2, 1),
-(2, 3, 0),
-(3, 1, 2),
-(3, 2, 0),
-(4, 1, 0),
-(4, 3, 1),
-(5, 2, 2),
-(5, 3, 0),
-(6, 1, 0),
-(6, 2, 1),
-(7, 3, 0),
-(7, 1, 1),
-(8, 2, 3),
-(8, 3, 0),
-(9, 1, 0),
-(9, 2, 2),
-(10, 1, 1),
-(10, 3, 0);
+(88, 1, 9),
+(88, 3, 8),
+(90, 2, 9),
+(90, 3, 8),
+(3, 1, 4),
+(3, 2, 6),
+(3, 3, 9),
+(67, 1, 0),
+(67, 3, 1),
+(88, 2, 2),
+(90, 1, 0);
+
 
 
 

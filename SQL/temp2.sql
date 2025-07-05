@@ -19,14 +19,9 @@ INSERT INTO publishers (id, name, address, website, contact_email) VALUES
 (10, 'Future Fiction Corp', '707 Tomorrow St, Seattle, WA', 'https://futurefiction.com', 'support@futurefiction.com');
 
 
-INSERT INTO payments (payment_date, method) VALUES
-('2025-06-01 10:15:00', 'bKash'),
-('2025-06-02 14:30:00', 'Nagad'),
-('2025-06-03 09:45:00', 'Rocket'),
-('2025-06-04 16:20:00', 'Upay'),
-('2025-06-05 11:00:00', 'bKash'),
-('2025-06-06 13:10:00', 'Nagad'),
-('2025-06-07 15:00:00', 'Rocket'),
-('2025-06-08 10:30:00', 'Upay'),
-('2025-06-09 12:40:00', 'bKash'),
-('2025-06-10 09:55:00', 'Nagad');
+INSERT INTO payments (method) VALUES
+( 'PayPal'),
+( 'Bkash'),
+( 'Nagad'),
+( 'Rocket');
+
