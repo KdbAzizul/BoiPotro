@@ -1,6 +1,7 @@
 import { apiSlice } from "./apiSlice";
 import { ORDERS_URL } from "../constants";
 
+
 export const ordersApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     createOrder: builder.mutation({
@@ -17,13 +18,41 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
         body: data,
       }),
     }),
-    getOrderDetails:builder.query({
-      query:(orderId) => ({
-        url:`${ORDERS_URL}/${orderId}`
+    getOrderDetails: builder.query({
+      query: (orderId) => ({
+        url: `${ORDERS_URL}/${orderId}`,
+      }),
+      keepUnusedDataFor: 5,
+    }),
+    getOrders: builder.query({
+      query: () => ({
+        url: ORDERS_URL,
+      }),
+      keepUnusedDataFor: 5,
+    }),
+    updateOrderState: builder.mutation({
+      query: ({orderId,state}) => ({
+        url: `${ORDERS_URL}/${orderId}/state`,
+        method: "PUT",
+        body:{state},
+      }),
+    }),
+    getMyOrders:builder.query({
+      query:()=>({
+        url:`${ORDERS_URL}/mine`,
       }),
       keepUnusedDataFor:5
     }),
+
+
   }),
 });
 
-export const { useCreateOrderMutation,useValidateCouponMutation,useGetOrderDetailsQuery } = ordersApiSlice;
+export const {
+  useCreateOrderMutation,
+  useValidateCouponMutation,
+  useGetOrderDetailsQuery,
+  useGetOrdersQuery,
+  useUpdateOrderStateMutation,
+  useGetMyOrdersQuery,
+} = ordersApiSlice;

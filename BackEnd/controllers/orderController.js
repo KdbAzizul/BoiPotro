@@ -133,8 +133,8 @@ const addOrderItems = asyncHandler(async (req, res) => {
     const cartRes = await client.query(
       `INSERT INTO "BOIPOTRO"."cart" (
          user_id, coupon_id, total_price, total_item, 
-         shipping_address, state, payment_id
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         shipping_address, payment_id,state_id
+       ) VALUES ($1, $2, $3, $4, $5, $6,1)
        RETURNING id`,
       [
         user_id,
@@ -142,7 +142,6 @@ const addOrderItems = asyncHandler(async (req, res) => {
         totalPrice,
         total_item,
         shippingAddress,
-        "unpaid",
         payment_id,
       ]
     );
@@ -176,7 +175,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
 });
 
 // @desc       get logged in user orders
-// @route      GET /api/orders/myorders
+// @route      GET /api/orders/mine
 // @access     private
 const getMyOrders = asyncHandler(async (req, res) => {
   const user_id = req.user.id;
@@ -185,10 +184,12 @@ const getMyOrders = asyncHandler(async (req, res) => {
   try {
     const ordersRes = await client.query(
       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-              c.state, c.created_at, p.method AS payment_method, cp.code AS coupon_code
+              c.state_id, c.created_at, p.method AS payment_method, cp.code AS coupon_code,
+              cs.name AS state_name
        FROM "BOIPOTRO"."cart" c
        LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
+       LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id=cs.id
        WHERE c.user_id = $1
        ORDER BY c.created_at DESC`,
       [user_id]
@@ -206,49 +207,62 @@ const getMyOrders = asyncHandler(async (req, res) => {
 // @desc       get order by id
 // @route      GET /api/orders/:id
 // @access     private
+
+
 const getOrderById = asyncHandler(async (req, res) => {
   const orderId = req.params.id;
   const user_id = req.user.id;
+  const isAdmin = req.user.isadmin;
+  
 
   const client = await pool.connect();
   try {
-    // 1. Get cart (order) info
-    const cartRes = await client.query(
-      `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-              c.state, c.created_at, p.method AS payment_method, cp.code AS coupon_code
-       FROM "BOIPOTRO"."cart" c
-       LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
-       LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
-       WHERE c.id = $1 AND c.user_id = $2`,
-      [orderId, user_id]
-    );
+    let cartRes;
+    if (isAdmin) {
+      cartRes = await client.query(
+        `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
+                c.state_id, c.created_at, p.method AS payment_method, cp.code AS coupon_code,
+                u.name AS user_name, u.email AS user_email,cs.name AS state_name
+         FROM "BOIPOTRO"."cart" c
+         JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
+         LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+         LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
+         LEFT JOIN "BOIPOTRO"."cart_states" cs on cs.id=c.state_id
+         WHERE c.id = $1`,
+        [orderId]
+      );
+    } else {
+      cartRes = await client.query(
+        `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
+                c.state_id, c.created_at, p.method AS payment_method, cp.code AS coupon_code,
+                u.name AS user_name, u.email AS user_email,cs.name AS state_name
+         FROM "BOIPOTRO"."cart" c
+         JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
+         LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+         LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
+         LEFT JOIN "BOIPOTRO"."cart_states" cs on cs.id=c.state_id
+         WHERE c.id = $1 AND c.user_id = $2`,
+        [orderId, user_id]
+      );
+    }
 
     if (cartRes.rowCount === 0) {
       res.status(404);
       throw new Error("Order not found");
     }
 
-    // 2. Get ordered items
     const itemsRes = await client.query(
-      `SELECT ci.book_id, b.title, b.price, ci.quantity,bp.photo_url
+      `SELECT ci.book_id, b.title, b.price, ci.quantity, bp.photo_url
        FROM "BOIPOTRO"."cartitems" ci
        JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
-       JOIN "BOIPOTRO"."book_photos" bp ON b.id=bp.id
+       LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.id
        WHERE ci.cart_id = $1`,
       [orderId]
-    );
-
-    const userRes = await client.query(
-      `SELECT u.name,u.email
-      FROM "BOIPOTRO"."users" u
-      WHERE u.id=$1`,
-      [user_id]
     );
 
     res.status(200).json({
       ...cartRes.rows[0],
       items: itemsRes.rows,
-      user:userRes.rows[0],
     });
   } catch (err) {
     console.error("Failed to fetch order:", err);
@@ -258,6 +272,58 @@ const getOrderById = asyncHandler(async (req, res) => {
   }
 });
 
+// const getOrderById = asyncHandler(async (req, res) => {
+//   const orderId = req.params.id;
+//   const user_id = req.user.id;
+
+//   const client = await pool.connect();
+//   try {
+//     // 1. Get cart (order) info
+//     const cartRes = await client.query(
+//       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
+//               c.state, c.created_at, p.method AS payment_method, cp.code AS coupon_code
+//        FROM "BOIPOTRO"."cart" c
+//        LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+//        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
+//        WHERE c.id = $1 AND c.user_id = $2`,
+//       [orderId, user_id]
+//     );
+
+//     if (cartRes.rowCount === 0) {
+//       res.status(404);
+//       throw new Error("Order not found");
+//     }
+
+//     // 2. Get ordered items
+//     const itemsRes = await client.query(
+//       `SELECT ci.book_id, b.title, b.price, ci.quantity,bp.photo_url
+//        FROM "BOIPOTRO"."cartitems" ci
+//        JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
+//        JOIN "BOIPOTRO"."book_photos" bp ON b.id=bp.id
+//        WHERE ci.cart_id = $1`,
+//       [orderId]
+//     );
+
+//     const userRes = await client.query(
+//       `SELECT u.name,u.email
+//       FROM "BOIPOTRO"."users" u
+//       WHERE u.id=$1`,
+//       [user_id]
+//     );
+
+//     res.status(200).json({
+//       ...cartRes.rows[0],
+//       items: itemsRes.rows,
+//       user:userRes.rows[0],
+//     });
+//   } catch (err) {
+//     console.error("Failed to fetch order:", err);
+//     res.status(500).json({ error: "Could not fetch order details" });
+//   } finally {
+//     client.release();
+//   }
+// });
+
 // @desc       Update order to paid
 // @route      GET /api/orders/:id/pay
 // @access     private
@@ -265,26 +331,80 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
   res.send("Update order to paid");
 });
 
-// @desc       Update order to delivered
-// @route      GET /api/orders/:id/deliver
+// @desc       Update order state
+// @route      GET /api/orders/:id/state
 // @access     private/Admin
-const updateOrderToDelivered = asyncHandler(async (req, res) => {
-  res.send("Update order to delivered");
-});
+const updateOrderState = async (req, res) => {
+  const cartId = req.params.id;
+  const { state } = req.body; 
 
-// @desc       get all orders
+  // Check if valid state
+  const stateResult = await pool.query(`SELECT id FROM "BOIPOTRO"."cart_states" WHERE name = $1`, [state]);
+  if (stateResult.rows.length === 0) return res.status(400).json({ error: 'Invalid state' });
+
+  const stateId = stateResult.rows[0].id;
+
+  // Update cart state
+  await pool.query(`UPDATE "BOIPOTRO"."cart" SET state_id = $1 WHERE id = $2`, [stateId, cartId]);
+
+  res.json({ message: `Cart ${cartId} state updated to ${state}` });
+};
+
+
+// @desc       Get all orders (admin only)
 // @route      GET /api/orders
 // @access     private/Admin
 const getOrders = asyncHandler(async (req, res) => {
-  res.send("get all orders");
+  const client = await pool.connect();
+
+  try {
+    const ordersRes = await client.query(
+      `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address,
+              c.state_id, c.created_at, u.name AS user_name, u.email AS user_email,
+              p.method AS payment_method, cp.code AS coupon_code
+       FROM "BOIPOTRO"."cart" c
+       JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
+       LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+       LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
+       ORDER BY c.created_at DESC`
+    );
+
+    const enrichedOrders = [];
+
+    // Loop over orders and fetch cart items for each
+    for (const order of ordersRes.rows) {
+      const itemsRes = await client.query(
+        `SELECT ci.book_id, b.title, b.price, ci.quantity, bp.photo_url
+         FROM "BOIPOTRO"."cartitems" ci
+         JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
+         LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.id
+         WHERE ci.cart_id = $1`,
+        [order.cart_id]
+      );
+
+      enrichedOrders.push({
+        ...order,
+        items: itemsRes.rows,
+      });
+    }
+
+    res.status(200).json(enrichedOrders);
+    console.log("fetched all orders");
+  } catch (err) {
+    console.error("Failed to fetch all orders:", err);
+    res.status(500).json({ error: "Could not fetch all orders" });
+  } finally {
+    client.release();
+  }
 });
+
 
 export {
   validateCoupon,
   addOrderItems,
   getMyOrders,
   getOrderById,
-  updateOrderToDelivered,
+  updateOrderState,
   updateOrderToPaid,
   getOrders,
 };

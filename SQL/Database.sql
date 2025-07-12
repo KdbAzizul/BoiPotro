@@ -101,12 +101,13 @@ CREATE TABLE cart (
     total_price     NUMERIC,
     total_item      INTEGER,
     shipping_address  VARCHAR(1000),
-    state           VARCHAR(50),
+    state_id INTEGER,
     payment_id  INTEGER,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(ID),
     FOREIGN KEY (coupon_id) REFERENCES coupons(id),
-    FOREIGN KEY (payment_id) REFERENCES payments(id)
+    FOREIGN KEY (payment_id) REFERENCES payments(id),
+    FOREIGN KEY (state_id) REFERENCES cart_states(id)
 );
 
 CREATE TABLE cartItems (
@@ -141,7 +142,14 @@ CONSTRAINT fk_bphotos_book FOREIGN KEY (book_id) REFERENCES books(id)
 );
 
 
+-- cart_states
+CREATE TABLE cart_states (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) UNIQUE NOT NULL
+);
 
+INSERT INTO cart_states (name) VALUES
+('pending'), ('processing'), ('shipped'), ('delivered'), ('cancelled'), ('returned');
 
 
 

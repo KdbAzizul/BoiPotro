@@ -3,7 +3,7 @@ import {
     addOrderItems,
     getMyOrders,
     getOrderById,
-    updateOrderToDelivered,
+    updateOrderState,
     updateOrderToPaid,
     getOrders,
 } from "../controllers/orderController.js";
@@ -17,5 +17,5 @@ router.route('/validateCoupon').post(protect,validateCoupon);
 router.route('/mine').get(protect,getMyOrders);
 router.route('/:id').get(protect,getOrderById);
 router.route('/:id/pay').put(protect,updateOrderToPaid);
-router.route('/:id/deliver').put(protect,admin,updateOrderToDelivered);
+router.route('/:id/state').put(protect,admin,updateOrderState);
 export default router;

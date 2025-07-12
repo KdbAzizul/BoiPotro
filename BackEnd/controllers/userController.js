@@ -119,13 +119,14 @@ const getUserProfile = asyncHandler(async(req,res) => {
 // @access     private
 const updateUserProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-
+    
     const result = await pool.query(
         'SELECT * FROM "BOIPOTRO"."users" WHERE id = $1',
         [userId]
     );
 
     const user = result.rows[0];
+    
 
     if (!user) {
         return res.status(404).json({ message: 'User not found' });
@@ -150,6 +151,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     );
 
     const updatedUser = updateResult.rows[0];
+    
 
     res.status(200).json({
         id: updatedUser.id,
