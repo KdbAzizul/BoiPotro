@@ -21,8 +21,9 @@ import {
 } from "../slices/productsApiSlice";
 import Loader from "../components/Loader";
 import Message from "../components/Message";
-import { addToCart } from "../slices/cartSlice";
+import { useAddToCartMutation } from "../slices/cartApiSlice";
 import { toast } from "react-toastify";
+import QuantitySelector from "../components/QuantitySelector";
 
 const ProductScreen = () => {
   const { id: productId } = useParams();
@@ -48,11 +49,22 @@ const ProductScreen = () => {
 
   const { userInfo } = useSelector((state) => state.auth);
 
-  const addToCartHandler = () => {
-    dispatch(addToCart({ ...product, qty }));
-    toast.success('Added to Cart Successfully');
-    //navigate("/cart");
+  const [addToCart] = useAddToCartMutation(); //loading & error should be added here
+
+  const addToCartHandler = async () => {
+    try {
+      await addToCart({ book_id: product.id, quantity: qty }).unwrap();
+      toast.success("Added to Cart");
+    } catch (err) {
+      toast.error("Failed to add to cart");
+    }
   };
+
+  // const addToCartHandler = () => {
+  //   dispatch(addToCart({ ...product, qty }));
+  //   toast.success("Added to Cart Successfully");
+  //   //navigate("/cart");
+  // };
 
   const submitHandler = async (e) => {
     e.preventDefault();
@@ -161,21 +173,70 @@ const ProductScreen = () => {
 
                   {product.stock > 0 && (
                     <ListGroup.Item>
-                      <Row>
-                        <Col>Quantity</Col>
-                        <Col>
-                          <Form.Control
-                            as="select"
-                            value={qty}
-                            onChange={(e) => setQty(Number(e.target.value))}
-                          >
-                            {[...Array(product.stock).keys()].map((x) => (
-                              <option key={x + 1} value={x + 1}>
-                                {x + 1}
-                              </option>
-                            ))}
-                          </Form.Control>
+                      <Row className="align-items-center">
+                        <Col xs={5}>Quantity</Col>
+
+                        <Col xs={7}>
+                          <QuantitySelector
+                            qty={qty}
+                            setQty={setQty}
+                            stock={product.stock}
+                          />
                         </Col>
+                        {/* <Col xs={4} className="d-flex align-items-center">
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            onClick={() => setQty(qty > 1 ? qty - 1 : 1)}
+                            disabled={qty <= 1}
+                          >
+                            -
+                          </Button>
+
+                          <Form.Control
+                            type="number"
+                            value={qty}
+                            onChange={(e) => {
+                              const val = e.target.value;
+
+                              // Allow temporary empty input (when user is deleting to type a new number)
+                              if (val === "") {
+                                setQty(""); // Set as empty string temporarily
+                                return;
+                              }
+
+                              const num = Number(val);
+
+                              // Only set qty if number is valid
+                              if (
+                                !isNaN(num) &&
+                                num >= 1 &&
+                                num <= product.stock
+                              ) {
+                                setQty(num);
+                              }
+                            }}
+                            onBlur={() => {
+                              // On losing focus, reset to minimum 1 if empty or invalid
+                              if (qty === "" || qty < 1) {
+                                setQty(1);
+                              }
+                            }}
+                            className="mx-2 text-center"
+                            style={{ width: "60px" }}
+                          />
+
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            onClick={() =>
+                              setQty(qty < product.stock ? qty + 1 : qty)
+                            }
+                            disabled={qty >= product.stock}
+                          >
+                            +
+                          </Button>
+                        </Col> */}
                       </Row>
                     </ListGroup.Item>
                   )}
@@ -184,7 +245,7 @@ const ProductScreen = () => {
                     <Button
                       className="btn-block"
                       type="button"
-                      disabled={product.stock === 0}
+                      disabled={product.stock <= 0}
                       onClick={addToCartHandler}
                     >
                       Add To Cart

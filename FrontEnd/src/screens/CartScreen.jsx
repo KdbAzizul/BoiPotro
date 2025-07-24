@@ -11,25 +11,61 @@ import {
 import { FaTrash } from "react-icons/fa";
 import Message from "../components/Message";
 import { useDispatch, useSelector } from "react-redux";
-import { addToCart, removeFromCart } from "../slices/cartSlice";
+import {
+  useGetCartQuery,
+  useAddToCartMutation,
+  useRemoveFromCartMutation,
+} from "../slices/cartApiSlice";
+import QuantitySelector from "../components/QuantitySelector";
 
 const CartScreen = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const cart = useSelector((state) => state.cart);
-  const { cartItems } = cart;
+  //const { data: cartItems = [], isLoading, error } = useGetCartQuery();
+  const { data = {}, isLoading, error } = useGetCartQuery();
+  const {
+    cartItems = [],
+    itemsPrice = 0,
+    shippingPrice = 0,
 
-  const addToCartHandler = async (product, qty) => {
-    dispatch(addToCart({ ...product, qty }));
+    totalPrice = 0,
+  } = data;
+
+  const [removeFromCart] = useRemoveFromCartMutation();
+
+  const [addToCart] = useAddToCartMutation(); //loading & error should be added here
+
+  const addToCartHandler = async (bookId, qty) => {
+    try {
+      await addToCart({ book_id: bookId, quantity: qty }).unwrap();
+      toast.success("Added to Cart");
+    } catch (err) {
+      toast.error("Failed to add to cart");
+    }
   };
-  const removeFromCartHandler = async (id) => {
-    dispatch(removeFromCart(id));
+
+  const removeFromCartHandler = async (book_id) => {
+    try {
+      await removeFromCart(book_id).unwrap();
+      toast.success("Removed from cart");
+    } catch (err) {
+      toast.error("Failed to remove");
+    }
   };
+
+  // const cart = useSelector((state) => state.cart);
+  // const { cartItems } = cart;
+
+  // const addToCartHandler = async (product, qty) => {
+  //   dispatch(addToCart({ ...product, qty }));
+  // };
+  // const removeFromCartHandler = async (id) => {
+  //   dispatch(removeFromCart(id));
+  // };
   const checkoutHandler = () => {
-    navigate('/login?redirect=/shipping')
-  }
-
+    navigate("/login?redirect=/shipping");
+  };
 
   return (
     <Row>
@@ -45,27 +81,81 @@ const CartScreen = () => {
               <ListGroup.Item key={item.id}>
                 <Row>
                   <Col md={2}>
-                    <Image src={item.image} alt={item.name} fluid rounded />
+                    <Image src={item.image} alt={item.title} fluid rounded />
                   </Col>
                   <Col md={3}>
-                    <Link to={`/product/${item.id}`}>{item.name}</Link>
+                    <Link to={`/product/${item.id}`}>{item.title}</Link>
                   </Col>
-                  <Col md={2}>Tk {item.price}</Col>
-                  <Col md={2}>
-                    <Form.Control
-                      as="select"
-                      value={item.qty}
-                      onChange={(e) =>
-                        addToCartHandler(item, Number(e.target.value))
+                  <Col md={2}>$ {item.price}</Col>
+
+                  <Col md={3}>
+                    <QuantitySelector
+                      qty={item.quantity}
+                      setQty={(newQty) => addToCartHandler(item.id, newQty)}
+                      stock={item.stock}
+                    />
+                  </Col>
+                  {/* <Col md={3} className="d-flex align-items-center">
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={() =>
+                        addToCartHandler(
+                          item.id,
+                          item.quantity > 1 ? item.quantity - 1 : 1
+                        )
                       }
+                      disabled={item.quantity <= 1}
                     >
-                      {[...Array(item.stock).keys()].map((x) => (
-                        <option key={x + 1} value={x + 1}>
-                          {x + 1}
-                        </option>
-                      ))}
-                    </Form.Control>
-                  </Col>
+                      -
+                    </Button>
+
+                    <Form.Control
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const val = e.target.value;
+
+                        if (val === "") {
+                          // allow temporary empty input
+                          addToCartHandler(item.id, "");
+                          return;
+                        }
+
+                        const num = Number(val);
+                        if (!isNaN(num) && num >= 1 && num <= item.stock) {
+                          addToCartHandler(item.id, num);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const val = Number(e.target.value);
+                        if (isNaN(val) || val < 1) {
+                          addToCartHandler(item.id, 1);
+                        }
+                      }}
+                      className="mx-2 text-center"
+                      style={{ width: "60px" }}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                    />
+
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={() =>
+                        addToCartHandler(
+                          item.id,
+                          item.quantity < item.stock
+                            ? item.quantity + 1
+                            : item.quantity
+                        )
+                      }
+                      disabled={item.quantity >= item.stock}
+                    >
+                      +
+                    </Button>
+                  </Col> */}
+
                   <Col md={2}>
                     <Button
                       type="button"
@@ -86,14 +176,22 @@ const CartScreen = () => {
           <ListGroup variant="flush">
             <ListGroup.Item>
               <h2>
-                SubTotal ({cartItems.reduce((acc, item) => acc + item.qty, 0)})
-                Books
+                Subtotal (
+                {cartItems.reduce((acc, item) => acc + item.quantity, 0)}) Books
               </h2>
-              Tk
-              {cartItems
-                .reduce((acc, item) => acc + item.qty * item.price, 0)
-                .toFixed(2)}
             </ListGroup.Item>
+
+            <ListGroup.Item>
+              <strong>Items Price:</strong> $ {itemsPrice.toFixed(2)}
+            </ListGroup.Item>
+            <ListGroup.Item>
+              <strong>Shipping:</strong> $ {shippingPrice.toFixed(2)}
+            </ListGroup.Item>
+
+            <ListGroup.Item>
+              <strong>Total:</strong> $ {totalPrice.toFixed(2)}
+            </ListGroup.Item>
+
             <ListGroup.Item>
               <Button
                 type="button"

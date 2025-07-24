@@ -151,6 +151,13 @@ CREATE TABLE cart_states (
 INSERT INTO cart_states (name) VALUES
 ('pending'), ('processing'), ('shipped'), ('delivered'), ('cancelled'), ('returned');
 
+CREATE TABLE picked_items (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  book_id INTEGER REFERENCES books(id),
+  quantity INTEGER DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 
 

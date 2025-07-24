@@ -322,7 +322,7 @@ const createProductReview = asyncHandler(async (req, res) => {
     res.status(404).json({ message: "Resource not found" });
   }
 });
-
+// @desc create a book
 // @route POST /api/admin/books
 // @access Private/Admin
 const createBook = asyncHandler(async (req, res) => {
@@ -356,8 +356,8 @@ const createBook = asyncHandler(async (req, res) => {
 
   res.status(201).json(result.rows[0]);
 });
-
-// @route PUT /api/admin/books/:id
+// @desc update a book info
+// @route PUT /api/books/:id
 // @access Private/Admin
 const updateBook = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -401,8 +401,8 @@ const updateBook = asyncHandler(async (req, res) => {
 
   res.json(updated.rows[0]);
 });
-
-// @route DELETE /api/admin/books/:id
+// @desc update a book info
+// @route DELETE /api/books/:id
 // @access Private/Admin
 const deleteBook = asyncHandler(async (req, res) => {
   const { id } = req.params;

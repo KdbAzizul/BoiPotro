@@ -2,13 +2,26 @@ import asyncHandler from "../middleware/asyncHandler.js";
 import bcrypt from "bcryptjs";
 import pool from "../db.js";
 import generateToken from "../utils/generateToken.js";
+import { calculateCartPrices } from "../utils/calculateCartPrices.js";
 
 // @desc       validate coupon
 // @route      POST /api/orders/validateCoupon
 // @access     private
 const validateCoupon = asyncHandler(async (req, res) => {
-  const { code, cart_total } = req.body;
+  const { code } = req.body;
   const user_id = req.user.id;
+
+  const result = await pool.query(
+    `SELECT c.id as cart_id, c.quantity, b.id as book_id, b.title, b.price, b.discount
+     FROM "BOIPOTRO"."picked_items" c
+     JOIN "BOIPOTRO"."books" b ON c.book_id = b.id
+     WHERE c.user_id = $1`,
+    [user_id]
+  );
+
+  const cartItems = result.rows;
+
+  const { totalPrice } = calculateCartPrices(cartItems);
   const now = new Date();
 
   const couponRes = await pool.query(
@@ -22,7 +35,7 @@ const validateCoupon = asyncHandler(async (req, res) => {
 
   const coupon = couponRes.rows[0];
 
-  const cartTotal = parseFloat(cart_total);
+  const cartTotal = parseFloat(totalPrice);
   const minOrderAmount = parseFloat(coupon.min_order_amount) || 0;
 
   // Validate date
@@ -103,7 +116,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     let total_item = 0;
     for (const item of cartItems) {
-      const qty = parseInt(item.qty, 10);
+      const qty = parseInt(item.quantity, 10);
       total_item += qty;
     }
 
@@ -136,21 +149,14 @@ const addOrderItems = asyncHandler(async (req, res) => {
          shipping_address, payment_id,state_id
        ) VALUES ($1, $2, $3, $4, $5, $6,1)
        RETURNING id`,
-      [
-        user_id,
-        coupon_id,
-        totalPrice,
-        total_item,
-        shippingAddress,
-        payment_id,
-      ]
+      [user_id, coupon_id, totalPrice, total_item, shippingAddress, payment_id]
     );
 
     const cart_id = cartRes.rows[0].id;
 
     for (const item of cartItems) {
       const bookId = parseInt(item.id, 10);
-      const quantity = parseInt(item.qty, 10);
+      const quantity = parseInt(item.quantity, 10);
 
       await client.query(
         `INSERT INTO "BOIPOTRO"."cartitems" (cart_id, book_id, quantity)
@@ -158,6 +164,8 @@ const addOrderItems = asyncHandler(async (req, res) => {
         [cart_id, bookId, quantity]
       );
     }
+
+    //await pool.query(`DELETE FROM "BOIPOTRO"."picked_items" WHERE user_id = $1`, [user_id]);
 
     await client.query("COMMIT");
 
@@ -208,12 +216,10 @@ const getMyOrders = asyncHandler(async (req, res) => {
 // @route      GET /api/orders/:id
 // @access     private
 
-
 const getOrderById = asyncHandler(async (req, res) => {
   const orderId = req.params.id;
   const user_id = req.user.id;
   const isAdmin = req.user.isadmin;
-  
 
   const client = await pool.connect();
   try {
@@ -280,7 +286,7 @@ const getOrderById = asyncHandler(async (req, res) => {
 //   try {
 //     // 1. Get cart (order) info
 //     const cartRes = await client.query(
-//       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
+//       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address,
 //               c.state, c.created_at, p.method AS payment_method, cp.code AS coupon_code
 //        FROM "BOIPOTRO"."cart" c
 //        LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
@@ -336,20 +342,26 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
 // @access     private/Admin
 const updateOrderState = async (req, res) => {
   const cartId = req.params.id;
-  const { state } = req.body; 
+  const { state } = req.body;
 
   // Check if valid state
-  const stateResult = await pool.query(`SELECT id FROM "BOIPOTRO"."cart_states" WHERE name = $1`, [state]);
-  if (stateResult.rows.length === 0) return res.status(400).json({ error: 'Invalid state' });
+  const stateResult = await pool.query(
+    `SELECT id FROM "BOIPOTRO"."cart_states" WHERE name = $1`,
+    [state]
+  );
+  if (stateResult.rows.length === 0)
+    return res.status(400).json({ error: "Invalid state" });
 
   const stateId = stateResult.rows[0].id;
 
   // Update cart state
-  await pool.query(`UPDATE "BOIPOTRO"."cart" SET state_id = $1 WHERE id = $2`, [stateId, cartId]);
+  await pool.query(`UPDATE "BOIPOTRO"."cart" SET state_id = $1 WHERE id = $2`, [
+    stateId,
+    cartId,
+  ]);
 
   res.json({ message: `Cart ${cartId} state updated to ${state}` });
 };
-
 
 // @desc       Get all orders (admin only)
 // @route      GET /api/orders
@@ -397,7 +409,6 @@ const getOrders = asyncHandler(async (req, res) => {
     client.release();
   }
 });
-
 
 export {
   validateCoupon,

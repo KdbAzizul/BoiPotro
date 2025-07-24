@@ -1,13 +1,34 @@
+import { useEffect } from "react";
 import { Badge, Navbar, Nav, Container, NavDropdown } from "react-bootstrap";
 import { FaShoppingCart, FaUser } from "react-icons/fa";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate,useParams } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { useLoginMutation, useLogoutMutation } from "../slices/usersApiSlice";
+import { useGetCartQuery } from "../slices/cartApiSlice";
 import { logout } from "../slices/authSlice";
+import { apiSlice } from "../slices/apiSlice";
+import { cartApiSlice } from "../slices/cartApiSlice";
+import SearchBox from "./SearchBox";
 
 const Header = () => {
-  const { cartItems } = useSelector((state) => state.cart);
+  //const { cartItems } = useSelector((state) => state.cart);
+   const { keyword } = useParams();
+  const { data = {}, isLoading, error, refetch } = useGetCartQuery(keyword || '');
+
+  const {
+    cartItems = [],
+    itemsPrice = 0,
+    shippingPrice = 0,
+
+    totalPrice = 0,
+  } = data;
+
   const { userInfo } = useSelector((state) => state.auth);
+
+  useEffect(() => {
+    // Refetch the cart when userInfo changes
+    refetch();
+  }, [userInfo, refetch]);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -18,7 +39,11 @@ const Header = () => {
     try {
       await logoutApiCall().unwrap();
       dispatch(logout());
+      //dispatch(apiSlice.util.invalidateTags(['cart']));
+      //dispatch(cartApiSlice.util.invalidateTags(['Cart']));
+      dispatch(apiSlice.util.resetApiState());
       navigate("/login");
+      console.log("Cart Items:", cartItems);
     } catch (error) {
       console.log(error);
     }
@@ -31,10 +56,12 @@ const Header = () => {
           <Navbar.Brand as={Link} to="/">
             বইপত্র
           </Navbar.Brand>
-
+           
           <Navbar.Toggle aria-controls="basic-navbar-nav" />
           <Navbar.Collapse id="basic-navbar-nav">
+            
             <Nav className="ms-auto">
+              <SearchBox/>
               <Nav.Link as={Link} to="/cart">
                 <FaShoppingCart /> Cart
                 {cartItems.length > 0 && (
@@ -45,7 +72,7 @@ const Header = () => {
                       marginLeft: "5px",
                     }}
                   >
-                    {cartItems.reduce((a, c) => a + c.qty, 0)}
+                    {cartItems.reduce((a, c) => a + c.quantity, 0)}
                   </Badge>
                 )}
               </Nav.Link>

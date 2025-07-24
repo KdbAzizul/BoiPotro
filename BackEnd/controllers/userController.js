@@ -162,34 +162,83 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 });
 
 
-// @desc       Get all users
-// @route      GET /api/users
-// @access     private/admin
-const getUsers = asyncHandler(async(req,res) => {
-    res.send('get users');
-})
 
-// @desc       Get user by id
-// @route      GET /api/users/:id
-// @access     private/admin
-const getUserByID = asyncHandler(async(req,res) => {
-    res.send('get user by id');
-})
 
-// @desc       Delete user
-// @route      DELETE /api/users/:id
-// @access     private/admin
-const deleteUser = asyncHandler(async(req,res) => {
-    res.send('delete user');
-})
+// @desc    Get all users 
+// @route   GET /api/users
+// @access  Private/Admin
+const getUsers = asyncHandler(async (req, res) => {
+  const result = await pool.query(
+    `SELECT id, name, email, isadmin AS "isAdmin"
+     FROM "BOIPOTRO"."users"
+     ORDER BY id`
+  );
+  res.json(result.rows);
+});
 
-// @desc       Update user
-// @route      PUT /api/users/:id
-// @access     private/admin
-const updateUser = asyncHandler(async(req,res) => {
-    res.send('update user');
-})
+// @desc    Get user by ID 
+// @route   GET /api/users/:id
+// @access  Private/Admin
+const getUserByID = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
+  const result = await pool.query(
+    `SELECT id, name, email, isadmin AS "isAdmin"
+     FROM "BOIPOTRO"."users"
+     WHERE id = $1`,
+    [id]
+  );
+
+  const user = result.rows[0];
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  res.json(user);
+});
+
+// @desc    Delete user
+// @route   DELETE /api/users/:id
+// @access  Private/Admin
+const deleteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const result = await pool.query(
+    'DELETE FROM "BOIPOTRO"."users" WHERE id = $1 RETURNING id',
+    [id]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json({ message: 'User deleted successfully' });
+});
+
+// @desc    Update user 
+// @route   PUT /api/users/:id
+// @access  Private/Admin
+const updateUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const result = await pool.query('SELECT * FROM "BOIPOTRO"."users" WHERE id = $1', [id]);
+  const user = result.rows[0];
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  const {
+    name = user.name,
+    email = user.email,
+    isAdmin = user.is_admin,
+  } = req.body;
+
+  const updateResult = await pool.query(
+    `UPDATE "BOIPOTRO"."users"
+     SET name = $1, email = $2, isadmin = $3
+     WHERE id = $4
+     RETURNING id, name, email, isadmin AS "isAdmin"`,
+    [name, email, isAdmin, id]
+  );
+
+  res.json(updateResult.rows[0]);
+});
 
 export{
     authUser,

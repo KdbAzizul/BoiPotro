@@ -10,17 +10,24 @@ import {
   useCreateOrderMutation,
   useValidateCouponMutation,
 } from "../slices/ordersApiSlice";
-import { clearCartItems } from "../slices/cartSlice";
+import { useGetCartQuery,useClearCartMutation } from "../slices/cartApiSlice";
+
 
 const PlaceOrderScreen = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const cart = useSelector((state) => state.cart);
 
+  const { data: cart, isLoading: cartLoading, refetch } = useGetCartQuery();
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [newTotal, setNewTotal] = useState(cart.totalPrice);
+  const [newTotal, setNewTotal] = useState(0);
+
+  useEffect(() => {
+    if (cart?.totalPrice) {
+      setNewTotal(cart.totalPrice);
+    }
+  }, [cart?.totalPrice]);
 
   const [createOrder, { isLoading, error }] = useCreateOrderMutation();
 
@@ -32,7 +39,7 @@ const PlaceOrderScreen = () => {
     try {
       const res = await validateCoupon({
         code: couponCode,
-        cart_total: cart.totalPrice,
+        //cart_total: cart.totalPrice,
       }).unwrap();
 
       console.log("🔁 Coupon validation response:", res);
@@ -56,29 +63,43 @@ const PlaceOrderScreen = () => {
     }
   };
 
+  const { shippingAddress, paymentMethod } = useSelector((state) => state.cart);
   useEffect(() => {
-    if (!cart.shippingAddress.address) {
+    if (!shippingAddress?.address) {
       navigate("/shipping");
-    } else if (!cart.paymentMethod) {
+    } else if (!paymentMethod) {
       navigate("/payment");
     }
-  }, [cart.paymentMethod, cart.shippingAddress.address, navigate]);
+  }, [shippingAddress, paymentMethod, navigate]);
+
+  // useEffect(() => {
+  //   if (!cart.shippingAddress.address) {
+  //     navigate("/shipping");
+  //   } else if (!cart.paymentMethod) {
+  //     navigate("/payment");
+  //   }
+  // }, [cart.paymentMethod, cart.shippingAddress.address, navigate]);
+  const [clearCart] = useClearCartMutation();
 
   const placeOrderHandler = async () => {
     try {
       const res = await createOrder({
         cartItems: cart.cartItems,
-        shippingAddress: cart.shippingAddress,
-        paymentMethod: cart.paymentMethod,
+        shippingAddress,
+        paymentMethod,
         totalPrice: newTotal, // Use discounted total
         couponName: couponApplied ? couponCode : null,
       }).unwrap();
-      dispatch(clearCartItems());
+
+      await clearCart().unwrap();
+      //dispatch(clearCartItems());
       navigate(`/order/${res.id}`);
     } catch (error) {
       toast.error(error);
     }
   };
+
+  if (cartLoading) return <Loader />;
 
   return (
     <>
@@ -90,15 +111,16 @@ const PlaceOrderScreen = () => {
               <h2>Shipping</h2>
               <p>
                 <strong>Address : </strong>
-                {cart.shippingAddress.address},{cart.shippingAddress.city},
-                {cart.shippingAddress.postalCode},{cart.shippingAddress.country}
+                {shippingAddress.address},{shippingAddress.city},
+                {shippingAddress.postalCode},
+                {shippingAddress.country}
               </p>
             </ListGroup.Item>
 
             <ListGroup.Item>
               <h2>Payment Method</h2>
               <strong>Method : </strong>
-              {cart.paymentMethod}
+              {paymentMethod}
             </ListGroup.Item>
 
             <ListGroup.Item>
@@ -123,7 +145,8 @@ const PlaceOrderScreen = () => {
                         </Col>
 
                         <Col md={4}>
-                          {item.qty} X ${item.price} = ${(item.qty * item.price).toFixed(2)}
+                          {item.quantity} X ${item.finalPrice} = $
+                          {(item.quantity * item.finalPrice).toFixed(2)}
                         </Col>
                       </Row>
                     </ListGroup.Item>
@@ -144,21 +167,14 @@ const PlaceOrderScreen = () => {
               <ListGroup.Item>
                 <Row>
                   <Col>Items:</Col>
-                  <Col>${cart.itemsPrice}</Col>
+                  <Col>${cart.itemsPrice.toFixed(2)}</Col>
                 </Row>
               </ListGroup.Item>
 
               <ListGroup.Item>
                 <Row>
                   <Col>Shipping:</Col>
-                  <Col>${cart.shippingPrice}</Col>
-                </Row>
-              </ListGroup.Item>
-
-              <ListGroup.Item>
-                <Row>
-                  <Col>Tax:</Col>
-                  <Col>${cart.taxPrice}</Col>
+                  <Col>${cart.shippingPrice.toFixed(2)}</Col>
                 </Row>
               </ListGroup.Item>
 
@@ -205,7 +221,9 @@ const PlaceOrderScreen = () => {
                     {couponApplied ? (
                       <>
                         <del className="text-muted">${cart.totalPrice}</del>{" "}
-                        <strong className="text-success">${newTotal.toFixed(2)}</strong>
+                        <strong className="text-success">
+                          ${newTotal.toFixed(2)}
+                        </strong>
                       </>
                     ) : (
                       <>${cart.totalPrice}</>
