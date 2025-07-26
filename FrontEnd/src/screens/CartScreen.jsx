@@ -95,66 +95,7 @@ const CartScreen = () => {
                       stock={item.stock}
                     />
                   </Col>
-                  {/* <Col md={3} className="d-flex align-items-center">
-                    <Button
-                      variant="outline-secondary"
-                      size="sm"
-                      onClick={() =>
-                        addToCartHandler(
-                          item.id,
-                          item.quantity > 1 ? item.quantity - 1 : 1
-                        )
-                      }
-                      disabled={item.quantity <= 1}
-                    >
-                      -
-                    </Button>
-
-                    <Form.Control
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const val = e.target.value;
-
-                        if (val === "") {
-                          // allow temporary empty input
-                          addToCartHandler(item.id, "");
-                          return;
-                        }
-
-                        const num = Number(val);
-                        if (!isNaN(num) && num >= 1 && num <= item.stock) {
-                          addToCartHandler(item.id, num);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const val = Number(e.target.value);
-                        if (isNaN(val) || val < 1) {
-                          addToCartHandler(item.id, 1);
-                        }
-                      }}
-                      className="mx-2 text-center"
-                      style={{ width: "60px" }}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                    />
-
-                    <Button
-                      variant="outline-secondary"
-                      size="sm"
-                      onClick={() =>
-                        addToCartHandler(
-                          item.id,
-                          item.quantity < item.stock
-                            ? item.quantity + 1
-                            : item.quantity
-                        )
-                      }
-                      disabled={item.quantity >= item.stock}
-                    >
-                      +
-                    </Button>
-                  </Col> */}
+                 
 
                   <Col md={2}>
                     <Button

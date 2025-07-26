@@ -1,107 +1,63 @@
-import { useState, useEffect } from "react";
-import { Form, Button, Row, Col, Table } from "react-bootstrap";
-import { Link } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { toast } from "react-toastify";
-import { useProfileMutation } from "../slices/usersApiSlice";
+import { Row, Col, Button, ListGroup, Table } from "react-bootstrap";
+import { Link, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { useGetMyOrdersQuery } from "../slices/ordersApiSlice";
-import { setCredentials } from "../slices/authSlice";
 import Loader from "../components/Loader";
 import Message from "../components/Message";
 
 const ProfileScreen = () => {
-  const dispatch = useDispatch();
-
+  const navigate = useNavigate();
   const { userInfo } = useSelector((state) => state.auth);
 
-  const [name, setName] = useState(userInfo?.name || "");
-  const [email, setEmail] = useState(userInfo?.email || "");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [updateProfile, { isLoading }] = useProfileMutation();
   const {
     data: orders,
     isLoading: loadingOrders,
     error: errorOrders,
-    refetch,
   } = useGetMyOrdersQuery();
 
-  const submitHandler = async (e) => {
-    e.preventDefault();
-    if (password && password !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
+  const updateHandler = () => {
+    navigate("/profile/edit");
+  };
 
-    try {
-      const res = await updateProfile({
-        id: userInfo.id,
-        name,
-        email,
-        password,
-      }).unwrap();
-      dispatch(setCredentials(res));
-      toast.success("Profile updated successfully");
-    } catch (err) {
-      toast.error(err?.data?.message || "Update failed");
-    }
+  const stateOptions = [
+    "pending",
+    "processing",
+    "shipped",
+    "delivered",
+    "cancelled",
+    "returned",
+  ];
+
+  const stateColor = {
+    pending: "warning",
+    processing: "primary",
+    shipped: "info",
+    delivered: "success",
+    cancelled: "danger",
+    returned: "secondary",
   };
 
   return (
     <Row>
       <Col md={4}>
-        <h2>User Profile</h2>
-        <Form onSubmit={submitHandler}>
-          <Form.Group className="my-3" controlId="name">
-            <Form.Label>Name</Form.Label>
-            <Form.Control
-              type="text"
-              placeholder="Enter name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Form.Group>
-
-          <Form.Group className="my-3" controlId="email">
-            <Form.Label>Email Address</Form.Label>
-            <Form.Control
-              type="email"
-              placeholder="Enter email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </Form.Group>
-
-          <Form.Group className="my-3" controlId="password">
-            <Form.Label>Password (optional)</Form.Label>
-            <Form.Control
-              type="password"
-              placeholder="Enter new password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Form.Group>
-
-          <Form.Group className="my-3" controlId="confirmPassword">
-            <Form.Label>Confirm Password</Form.Label>
-            <Form.Control
-              type="password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-          </Form.Group>
-
-          <Button type="submit" variant="primary" disabled={isLoading}>
-            Update
-          </Button>
-          {isLoading && <Loader />}
-        </Form>
+        <h2>Profile Information</h2>
+        <ListGroup variant="flush">
+          <ListGroup.Item>
+            <strong>Name:</strong> {userInfo?.name}
+          </ListGroup.Item>
+          <ListGroup.Item>
+            <strong>Email:</strong> {userInfo?.email}
+          </ListGroup.Item>
+          <ListGroup.Item>
+            <Button variant="primary" onClick={updateHandler}>
+              Update Profile
+            </Button>
+          </ListGroup.Item>
+        </ListGroup>
       </Col>
 
       <Col md={8}>
-        <h3 className="mt-4">My Orders</h3>
+        <h3 className="mt-3">My Orders</h3>
         {loadingOrders ? (
           <Loader />
         ) : errorOrders ? (
@@ -121,6 +77,7 @@ const ProfileScreen = () => {
                 <th>Total</th>
                 <th>Payment</th>
                 <th>Coupon</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -129,7 +86,7 @@ const ProfileScreen = () => {
                   <td>{order.cart_id}</td>
                   <td>{new Date(order.created_at).toLocaleDateString()}</td>
                   <td>
-                    <span
+                    {/* <span
                       className={`badge bg-${
                         ["delivered", "completed"].includes(order.state_id)
                           ? "success"
@@ -137,13 +94,23 @@ const ProfileScreen = () => {
                       }`}
                     >
                       {order.state_name}
-                    </span>
+                    </span> */}
+
+                    <p>
+                      <strong>State: </strong>
+                      <span
+                        className={`badge bg-${
+                          stateColor[order.state_name] || "dark"
+                        }`}
+                      >
+                        {order.state_name}
+                      </span>
+                    </p>
                   </td>
                   <td>{order.total_item}</td>
                   <td>${order.total_price}</td>
                   <td>{order.payment_method || "Unpaid"}</td>
                   <td>{order.coupon_code || "-"}</td>
-
                   <td>
                     <Link to={`/order/${order.cart_id}`}>
                       <Button variant="light" size="sm">
@@ -162,163 +129,3 @@ const ProfileScreen = () => {
 };
 
 export default ProfileScreen;
-// import { useState, useEffect } from 'react';
-// import { Form, Button, Row, Col } from 'react-bootstrap';
-// import { useDispatch, useSelector } from 'react-redux';
-// import { toast } from 'react-toastify';
-// import { useProfileMutation } from '../slices/usersApiSlice';
-// import { useGetMyOrdersQuery } from '../slices/ordersApiSlice';
-// import { setCredentials } from '../slices/authSlice';
-// import Loader from '../components/Loader';
-// import Message from '../components/Message';
-
-// const ProfileScreen = () => {
-//   const dispatch = useDispatch();
-//   const { userInfo } = useSelector((state) => state.auth);
-
-//   const [name, setName] = useState(userInfo?.name || '');
-//   const [email, setEmail] = useState(userInfo?.email || '');
-//   const [password, setPassword] = useState('');
-//   const [confirmPassword, setConfirmPassword] = useState('');
-
-//   const [updateProfile, { isLoading }] = useProfileMutation();
-//   const {
-//     data: orders,
-//     isLoading: loadingOrders,
-//     error: errorOrders,
-//     refetch,
-//   } = useGetMyOrdersQuery();
-
-//   const submitHandler = async (e) => {
-//     e.preventDefault();
-//     if (password && password !== confirmPassword) {
-//       toast.error('Passwords do not match');
-//       return;
-//     }
-
-//     try {
-//       const res = await updateProfile({
-//         id: userInfo.id,
-//         name,
-//         email,
-//         password,
-//       }).unwrap();
-//       dispatch(setCredentials(res));
-//       toast.success('Profile updated successfully');
-//     } catch (err) {
-//       toast.error(err?.data?.message || 'Update failed');
-//     }
-//   };
-
-//   return (
-//     <Row>
-//       <Col md={6}>
-//         <h2>User Profile</h2>
-//         <Form onSubmit={submitHandler}>
-//           <Form.Group className='my-3' controlId='name'>
-//             <Form.Label>Name</Form.Label>
-//             <Form.Control
-//               type='text'
-//               placeholder='Enter name'
-//               value={name}
-//               onChange={(e) => setName(e.target.value)}
-//             />
-//           </Form.Group>
-
-//           <Form.Group className='my-3' controlId='email'>
-//             <Form.Label>Email Address</Form.Label>
-//             <Form.Control
-//               type='email'
-//               placeholder='Enter email'
-//               value={email}
-//               onChange={(e) => setEmail(e.target.value)}
-//             />
-//           </Form.Group>
-
-//           <Form.Group className='my-3' controlId='password'>
-//             <Form.Label>Password (optional)</Form.Label>
-//             <Form.Control
-//               type='password'
-//               placeholder='Enter new password'
-//               value={password}
-//               onChange={(e) => setPassword(e.target.value)}
-//             />
-//           </Form.Group>
-
-//           <Form.Group className='my-3' controlId='confirmPassword'>
-//             <Form.Label>Confirm Password</Form.Label>
-//             <Form.Control
-//               type='password'
-//               placeholder='Confirm new password'
-//               value={confirmPassword}
-//               onChange={(e) => setConfirmPassword(e.target.value)}
-//             />
-//           </Form.Group>
-
-//           <Button type='submit' variant='primary' disabled={isLoading}>
-//             Update
-//           </Button>
-//           {isLoading && <Loader />}
-//         </Form>
-
-//         <hr />
-
-//         <h3 className='mt-4'>My Orders</h3>
-//         {loadingOrders ? (
-//           <Loader />
-//         ) : errorOrders ? (
-//           <Message variant='danger'>
-//             {errorOrders?.data?.message || 'Error loading orders'}
-//           </Message>
-//         ) : orders.length === 0 ? (
-//           <Message>No orders found</Message>
-//         ) : (
-//           <ListGroup variant='flush'>
-//             {orders.map((order) => (
-//               <ListGroup.Item key={order.cart_id}>
-//                 <Card className='p-2'>
-//                   <p>
-//                     <strong>Order ID:</strong> {order.cart_id}
-//                   </p>
-//                   <p>
-//                     <strong>Date:</strong>{' '}
-//                     {new Date(order.created_at).toLocaleString()}
-//                   </p>
-//                   <p>
-//                     <strong>Status:</strong>{' '}
-//                     <span
-//                       className={`badge bg-${
-//                         ['delivered', 'completed'].includes(order.state_id)
-//                           ? 'success'
-//                           : 'warning'
-//                       }`}
-//                     >
-//                       {order.state_id}
-//                     </span>
-//                   </p>
-//                   <p>
-//                     <strong>Items:</strong> {order.total_item}
-//                   </p>
-//                   <p>
-//                     <strong>Total:</strong> ${order.total_price}
-//                   </p>
-//                   <p>
-//                     <strong>Payment:</strong>{' '}
-//                     {order.payment_method || 'Unpaid'}
-//                   </p>
-//                   {order.coupon_code && (
-//                     <p>
-//                       <strong>Coupon:</strong> {order.coupon_code}
-//                     </p>
-//                   )}
-//                 </Card>
-//               </ListGroup.Item>
-//             ))}
-//           </ListGroup>
-//         )}
-//       </Col>
-//     </Row>
-//   );
-// };
-
-// export default ProfileScreen;

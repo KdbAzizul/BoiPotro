@@ -2,6 +2,7 @@ import asyncHandler from "../middleware/asyncHandler.js";
 import bcrypt from "bcryptjs";
 import pool from "../db.js";
 import generateToken from "../utils/generateToken.js";
+import { v4 as uuidv4 } from "uuid";
 import { calculateCartPrices } from "../utils/calculateCartPrices.js";
 
 // @desc       validate coupon
@@ -96,19 +97,18 @@ const validateCoupon = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc       create new order
-// @route      POST /api/orders
-// @access     private
-const addOrderItems = asyncHandler(async (req, res) => {
-  const { cartItems, shippingAddress, paymentMethod, couponName, totalPrice } =
-    req.body;
-  const user_id = req.user.id;
 
-  if (!cartItems || cartItems.length === 0) {
-    res.status(400);
-    throw new Error("No cart items found");
-  }
 
+export const createOrder = async ({
+  user_id,
+  cartItems,
+  shippingAddress,
+  paymentMethod,
+  couponName,
+  totalPrice,
+  tran_id,
+  is_paid,
+}) => {
   const client = await pool.connect();
 
   try {
@@ -131,25 +131,22 @@ const addOrderItems = asyncHandler(async (req, res) => {
       }
     }
 
-    let payment_id = null;
-    if (paymentMethod) {
-      const paymentRes = await client.query(
-        `SELECT id FROM "BOIPOTRO"."payments" WHERE method = $1`,
-        [paymentMethod]
-      );
-      if (paymentRes.rowCount > 0) {
-        payment_id = paymentRes.rows[0].id;
-      }
-    }
-
-    // Insert into cart
     const cartRes = await client.query(
       `INSERT INTO "BOIPOTRO"."cart" (
          user_id, coupon_id, total_price, total_item, 
-         shipping_address, payment_id,state_id
-       ) VALUES ($1, $2, $3, $4, $5, $6,1)
+         shipping_address, payment_method, tran_id, is_paid, state_id
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1)
        RETURNING id`,
-      [user_id, coupon_id, totalPrice, total_item, shippingAddress, payment_id]
+      [
+        user_id,
+        coupon_id,
+        totalPrice,
+        total_item,
+        shippingAddress,
+        paymentMethod,
+        tran_id,
+        is_paid,
+      ]
     );
 
     const cart_id = cartRes.rows[0].id;
@@ -157,6 +154,9 @@ const addOrderItems = asyncHandler(async (req, res) => {
     for (const item of cartItems) {
       const bookId = parseInt(item.id, 10);
       const quantity = parseInt(item.quantity, 10);
+      if (isNaN(bookId) || isNaN(quantity)) {
+        throw new Error("Invalid bookId or quantity in cartItems");
+      }
 
       await client.query(
         `INSERT INTO "BOIPOTRO"."cartitems" (cart_id, book_id, quantity)
@@ -165,22 +165,164 @@ const addOrderItems = asyncHandler(async (req, res) => {
       );
     }
 
-    //await pool.query(`DELETE FROM "BOIPOTRO"."picked_items" WHERE user_id = $1`, [user_id]);
+    await client.query(
+      `DELETE FROM "BOIPOTRO"."picked_items" WHERE user_id = $1`,
+      [user_id]
+    );
 
     await client.query("COMMIT");
 
-    res.status(201).json({
-      message: "Order created",
-      id: cart_id,
-    });
+    return cart_id;
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Order creation failed:", err);
-    res.status(500).json({ error: "Failed to create order" });
+    throw err;
   } finally {
     client.release();
   }
+};
+
+// @desc       create new order
+// @route      POST /api/orders
+// @access     private
+
+
+
+ const addOrderItems = asyncHandler(async (req, res) => {
+  const { cartItems, shippingAddress, paymentMethod, couponName, totalPrice } = req.body;
+
+  const user_id = req.user.id;
+  let tran_id = req.body.tran_id || uuidv4();
+  const is_paid = !!req.body.tran_id;
+
+  if (!cartItems || cartItems.length === 0) {
+    res.status(400);
+    throw new Error("No cart items found");
+  }
+
+  const cart_id = await createOrder({
+    user_id,
+    cartItems,
+    shippingAddress,
+    paymentMethod,
+    couponName,
+    totalPrice,
+    tran_id,
+    is_paid,
+  });
+
+  res.status(201).json({ message: "Order created", id: cart_id });
 });
+
+// const addOrderItems = asyncHandler(async (req, res) => {
+
+//   console.log("add order called");
+//   const { cartItems, shippingAddress, paymentMethod, couponName, totalPrice } =
+//     req.body;
+
+//   const user_id = req.user.id;
+//   let is_paid = true;
+
+//   let tran_id = req.body.tran_id || "";
+//   if (tran_id === "") {
+//     tran_id = uuidv4();
+//     is_paid = false;
+//   }
+
+//   if (!cartItems || cartItems.length === 0) {
+//     res.status(400);
+//     throw new Error("No cart items found");
+//   }
+
+//   const client = await pool.connect();
+
+//   try {
+//     await client.query("BEGIN");
+
+//     let total_item = 0;
+//     for (const item of cartItems) {
+//       const qty = parseInt(item.quantity, 10);
+//       total_item += qty;
+//     }
+
+//     let coupon_id = null;
+//     if (couponName) {
+//       const couponRes = await client.query(
+//         `SELECT id FROM "BOIPOTRO"."coupons" WHERE code = $1`,
+//         [couponName]
+//       );
+//       if (couponRes.rowCount > 0) {
+//         coupon_id = couponRes.rows[0].id;
+//       }
+//     }
+
+//     // let payment_id = null;
+//     // if (paymentMethod) {
+//     //   const paymentRes = await client.query(
+//     //     `SELECT id FROM "BOIPOTRO"."payments" WHERE method = $1`,
+//     //     [paymentMethod]
+//     //   );
+//     //   if (paymentRes.rowCount > 0) {
+//     //     payment_id = paymentRes.rows[0].id;
+//     //   }
+//     // }
+
+//     // Insert into cart
+//     const cartRes = await client.query(
+//       `INSERT INTO "BOIPOTRO"."cart" (
+//          user_id, coupon_id, total_price, total_item, 
+//          shipping_address, payment_method,tran_id,is_paid,state_id
+//        ) VALUES ($1, $2, $3, $4, $5, $6, $7,$8, 1)
+//        RETURNING id`,
+//       [
+//         user_id,
+//         coupon_id,
+//         totalPrice,
+//         total_item,
+//         shippingAddress,
+//         paymentMethod,
+//         tran_id,
+//         is_paid,
+//       ]
+//     );
+
+//     const cart_id = cartRes.rows[0].id;
+
+//     for (const item of cartItems) {
+//       const bookId = parseInt(item.id, 10);
+//       const quantity = parseInt(item.quantity, 10);
+
+//       if (isNaN(bookId) || isNaN(quantity)) {
+//         throw new Error("Invalid bookId or quantity in cartItems");
+//       }
+
+//       await client.query(
+//         `INSERT INTO "BOIPOTRO"."cartitems" (cart_id, book_id, quantity)
+//          VALUES ($1, $2, $3)`,
+//         [cart_id, bookId, quantity]
+//       );
+//     }
+
+//     //await pool.query(`DELETE FROM "BOIPOTRO"."picked_items" WHERE user_id = $1`, [user_id]);
+//     await client.query(
+//       `DELETE FROM "BOIPOTRO"."picked_items" WHERE user_id = $1`,
+//       [user_id]
+//     );
+
+//     await client.query("COMMIT");
+
+//     res.status(201).json({
+//       message: "Order created",
+//       id: cart_id,
+//     });
+//   } catch (err) {
+//     await client.query("ROLLBACK");
+//     console.error("Order creation failed:", err);
+//     res.status(500).json({ error: "Failed to create order" });
+//     return;
+//   } finally {
+//     client.release();
+//   }
+// });
 
 // @desc       get logged in user orders
 // @route      GET /api/orders/mine
@@ -192,10 +334,10 @@ const getMyOrders = asyncHandler(async (req, res) => {
   try {
     const ordersRes = await client.query(
       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-              c.state_id, c.created_at, p.method AS payment_method, cp.code AS coupon_code,
+              c.state_id, c.created_at, c.payment_method AS payment_method, cp.code AS coupon_code,
               cs.name AS state_name
        FROM "BOIPOTRO"."cart" c
-       LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+      
        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
        LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id=cs.id
        WHERE c.user_id = $1
@@ -227,11 +369,11 @@ const getOrderById = asyncHandler(async (req, res) => {
     if (isAdmin) {
       cartRes = await client.query(
         `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-                c.state_id, c.created_at, p.method AS payment_method, cp.code AS coupon_code,
+                c.state_id, c.created_at, c.payment_method, cp.code AS coupon_code,
                 u.name AS user_name, u.email AS user_email,cs.name AS state_name
          FROM "BOIPOTRO"."cart" c
          JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-         LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+         
          LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
          LEFT JOIN "BOIPOTRO"."cart_states" cs on cs.id=c.state_id
          WHERE c.id = $1`,
@@ -240,11 +382,11 @@ const getOrderById = asyncHandler(async (req, res) => {
     } else {
       cartRes = await client.query(
         `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-                c.state_id, c.created_at, p.method AS payment_method, cp.code AS coupon_code,
+                c.state_id, c.created_at, c.payment_method, cp.code AS coupon_code,
                 u.name AS user_name, u.email AS user_email,cs.name AS state_name
          FROM "BOIPOTRO"."cart" c
          JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-         LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+       
          LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
          LEFT JOIN "BOIPOTRO"."cart_states" cs on cs.id=c.state_id
          WHERE c.id = $1 AND c.user_id = $2`,
@@ -373,10 +515,10 @@ const getOrders = asyncHandler(async (req, res) => {
     const ordersRes = await client.query(
       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address,
               c.state_id, c.created_at, u.name AS user_name, u.email AS user_email,
-              p.method AS payment_method, cp.code AS coupon_code
+              c.payment_method, cp.code AS coupon_code
        FROM "BOIPOTRO"."cart" c
        JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-       LEFT JOIN "BOIPOTRO"."payments" p ON c.payment_id = p.id
+       
        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
        ORDER BY c.created_at DESC`
     );

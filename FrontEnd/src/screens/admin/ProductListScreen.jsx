@@ -42,12 +42,14 @@ const ProductListScreen = () => {
           <h1>Books</h1>
         </Col>
         <Col className="text-end">
-          <Button
-            className="btn-sm m-3"
-            onClick={() => toast("Create product placeholder")}
-          >
-            <FaEdit /> Create Product
-          </Button>
+          <Link to={`/admin/product/create`}>
+            <Button
+              className="btn-sm m-3"
+              onClick={() => toast("New Book will be created")}
+            >
+              <FaEdit /> Create Product
+            </Button>
+          </Link>
         </Col>
       </Row>
 
@@ -81,7 +83,7 @@ const ProductListScreen = () => {
                 <td>{book.publisher}</td>
 
                 <td>
-                  <Link to={`/admin/product/${book.id}/edit`}>
+                  <Link to={`/admin/product/edit/${book.id}`}>
                     <Button variant="light" className="btn-sm me-2">
                       <FaEdit />
                     </Button>

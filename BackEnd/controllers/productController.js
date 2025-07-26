@@ -229,7 +229,7 @@ const getBooksByAuthor = asyncHandler(async (req, res) => {
 //@desc     Search books by any keyword (title, author, publisher, isbn, category)
 //@route    GET  /api/products/search?keyword=xyz
 //@access   public
-const searchBooks = asyncHandler(async (req, res) => {
+const searchProducts = asyncHandler(async (req, res) => {
   const { keyword } = req.query;
 
   if (!keyword || keyword.trim() === "") {
@@ -323,9 +323,9 @@ const createProductReview = asyncHandler(async (req, res) => {
   }
 });
 // @desc create a book
-// @route POST /api/admin/books
+// @route POST /api/products
 // @access Private/Admin
-const createBook = asyncHandler(async (req, res) => {
+const createProduct = asyncHandler(async (req, res) => {
   const {
     title,
     description,
@@ -357,9 +357,9 @@ const createBook = asyncHandler(async (req, res) => {
   res.status(201).json(result.rows[0]);
 });
 // @desc update a book info
-// @route PUT /api/books/:id
+// @route PUT /api/products/:id
 // @access Private/Admin
-const updateBook = asyncHandler(async (req, res) => {
+const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const book = await pool.query(
@@ -402,9 +402,9 @@ const updateBook = asyncHandler(async (req, res) => {
   res.json(updated.rows[0]);
 });
 // @desc update a book info
-// @route DELETE /api/books/:id
+// @route DELETE /api/products/:id
 // @access Private/Admin
-const deleteBook = asyncHandler(async (req, res) => {
+const deleteProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const check = await pool.query(
@@ -425,8 +425,8 @@ export {
   getBooksByCategory,
   getBooksByAuthor,
   createProductReview,
-  searchBooks,
-  createBook,
-  updateBook,
-  deleteBook,
+  searchProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
 };

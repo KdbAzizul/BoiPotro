@@ -102,11 +102,13 @@ CREATE TABLE cart (
     total_item      INTEGER,
     shipping_address  VARCHAR(1000),
     state_id INTEGER,
-    payment_id  INTEGER,
+    payment_method  VARCHAR(50),
+    tran_id VARCHAR(100),
+    is_paid BOOLEAN DEFAULT FALSE,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(ID),
     FOREIGN KEY (coupon_id) REFERENCES coupons(id),
-    FOREIGN KEY (payment_id) REFERENCES payments(id),
+   
     FOREIGN KEY (state_id) REFERENCES cart_states(id)
 );
 
@@ -159,6 +161,19 @@ CREATE TABLE picked_items (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE payment_logs (
+  id SERIAL PRIMARY KEY,
+  cart_id INTEGER REFERENCES cart(id) ON DELETE SET NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+  tran_id VARCHAR(100) UNIQUE NOT NULL,        -- SSLCommerz Transaction ID
+  
+  amount NUMERIC(10, 2),                       -- Paid amount
+ 
+  card_type VARCHAR(50),                       -- Visa/MasterCard/Bkash/etc.
+                        
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 
 INSERT INTO users (ID, NAME, PASSWORD, ADDRESS, EMAIL, DOB, PHONE, isAdmin)

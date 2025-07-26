@@ -10,8 +10,7 @@ import {
   useCreateOrderMutation,
   useValidateCouponMutation,
 } from "../slices/ordersApiSlice";
-import { useGetCartQuery,useClearCartMutation } from "../slices/cartApiSlice";
-
+import { useGetCartQuery, useClearCartMutation } from "../slices/cartApiSlice";
 
 const PlaceOrderScreen = () => {
   const navigate = useNavigate();
@@ -79,25 +78,99 @@ const PlaceOrderScreen = () => {
   //     navigate("/payment");
   //   }
   // }, [cart.paymentMethod, cart.shippingAddress.address, navigate]);
+
   const [clearCart] = useClearCartMutation();
 
   const placeOrderHandler = async () => {
     try {
-      const res = await createOrder({
-        cartItems: cart.cartItems,
-        shippingAddress,
-        paymentMethod,
-        totalPrice: newTotal, // Use discounted total
-        couponName: couponApplied ? couponCode : null,
-      }).unwrap();
+      const response = await fetch("/api/payment/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cartItems: cart.cartItems,
+          shippingAddress,
+          totalPrice: newTotal,
+          couponName: couponApplied ? couponCode : null,
+        }),
+      });
+      console.log("📡 Response Status:", response.status);
+      const data = await response.json();
+      console.log("💳 Payment Init Response:", data);
 
-      await clearCart().unwrap();
-      //dispatch(clearCartItems());
-      navigate(`/order/${res.id}`);
-    } catch (error) {
-      toast.error(error);
+      if (data.GatewayPageURL) {
+        window.location.href = data.GatewayPageURL;
+      } else {
+        toast.error("Payment gateway failed to respond");
+      }
+    } catch (err) {
+      toast.error("Something went wrong with payment init");
+      console.error(err);
     }
   };
+
+  // const placeOrderHandler = async () => {
+  //   try {
+  //     const res = await createOrder({
+  //       cartItems: cart.cartItems,
+  //       shippingAddress,
+  //       paymentMethod,
+  //       totalPrice: newTotal,
+  //       couponName: couponApplied ? couponCode : null,
+  //     }).unwrap();
+
+  //     const orderId = res.id;
+
+  //     const paymentRes = await fetch("/api/payment/init", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         totalAmount: newTotal,
+  //         orderId: orderId,
+  //         customer: {
+  //           name: shippingAddress.fullName || "Customer",
+  //           email: "guest@example.com",
+  //           address: shippingAddress.address,
+  //           city: shippingAddress.city,
+  //           postalCode: shippingAddress.postalCode,
+  //           country: shippingAddress.country,
+  //           phone: shippingAddress.phone || "01700000000",
+  //         },
+  //       }),
+  //     });
+  //     console.log("📡 Response Status:", paymentRes.status);
+  //     const paymentData = await paymentRes.json();
+  //     console.log("💳 Payment Init Response:", paymentData);
+
+  //     if (paymentData.GatewayPageURL) {
+  //       await clearCart().unwrap();
+  //       window.location.href = paymentData.GatewayPageURL;
+
+  //     } else {
+  //       toast.error("Payment gateway init failed");
+  //     }
+  //   } catch (error) {
+  //     toast.error("Order creation or payment failed");
+  //     console.error(error);
+  //   }
+  // };
+
+  // const placeOrderHandler = async () => {
+  //   try {
+  //     const res = await createOrder({
+  //       cartItems: cart.cartItems,
+  //       shippingAddress,
+  //       paymentMethod,
+  //       totalPrice: newTotal, // Use discounted total
+  //       couponName: couponApplied ? couponCode : null,
+  //     }).unwrap();
+
+  //     await clearCart().unwrap();
+  //     //dispatch(clearCartItems());
+  //     navigate(`/order/${res.id}`);
+  //   } catch (error) {
+  //     toast.error(error);
+  //   }
+  // };
 
   if (cartLoading) return <Loader />;
 
@@ -112,8 +185,7 @@ const PlaceOrderScreen = () => {
               <p>
                 <strong>Address : </strong>
                 {shippingAddress.address},{shippingAddress.city},
-                {shippingAddress.postalCode},
-                {shippingAddress.country}
+                {shippingAddress.postalCode},{shippingAddress.country}
               </p>
             </ListGroup.Item>
 
