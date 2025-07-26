@@ -39,7 +39,8 @@ app.use('/api/admin', adminRoutes);
 
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, 'FrontEnd', 'dist');
+  // Go up one level from BackEnd/ to find FrontEnd/dist
+  const frontendPath = path.join(__dirname, '..', 'FrontEnd', 'dist');
   const indexPath = path.join(frontendPath, 'index.html');
   
   console.log('Production mode - serving frontend');
