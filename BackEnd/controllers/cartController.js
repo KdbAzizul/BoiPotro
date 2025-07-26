@@ -35,34 +35,44 @@ const addToCart = asyncHandler(async (req, res) => {
 // @route GET /api/cart
 // @access Private
 const getCartItems = asyncHandler(async (req, res) => {
-  const user_id = req.user.id;
+  try {
+    const user_id = req.user.id;
+    console.log('Fetching cart items for user:', user_id);
 
-  const result = await pool.query(
-    `SELECT c.id as cart_id, c.quantity, b.id , b.title, b.price, b.discount,bp.photo_url as image,b.stock
-     FROM "BOIPOTRO"."picked_items" c
-     JOIN "BOIPOTRO"."books" b ON c.book_id = b.id
-     LEFT JOIN "BOIPOTRO"."book_photos" bp ON c.book_id=bp.book_id AND bp.photo_order=1
-     WHERE c.user_id = $1`,
-    [user_id]
-  );
+    const result = await pool.query(
+      `SELECT c.id as cart_id, c.quantity, b.id , b.title, b.price, b.discount,bp.photo_url as image,b.stock
+       FROM "BOIPOTRO"."picked_items" c
+       JOIN "BOIPOTRO"."books" b ON c.book_id = b.id
+       LEFT JOIN "BOIPOTRO"."book_photos" bp ON c.book_id=bp.book_id AND bp.photo_order=1
+       WHERE c.user_id = $1`,
+      [user_id]
+    );
 
-  const cartItems = result.rows;
+    const cartItems = result.rows;
+    console.log(`Found ${cartItems.length} cart items`);
 
-  const {
-    cartItems: updatedCartItems,
-    itemsPrice,
-    shippingPrice,
- 
-    totalPrice,
-  } = calculateCartPrices(cartItems);  
-
-  res.json({
-    cartItems: updatedCartItems,
-    itemsPrice,
-    shippingPrice,
+    const {
+      cartItems: updatedCartItems,
+      itemsPrice,
+      shippingPrice,
    
-    totalPrice,
-  });
+      totalPrice,
+    } = calculateCartPrices(cartItems);  
+
+    res.json({
+      cartItems: updatedCartItems,
+      itemsPrice,
+      shippingPrice,
+     
+      totalPrice,
+    });
+  } catch (error) {
+    console.error('Error in getCartItems:', error);
+    res.status(500).json({ 
+      message: 'Database error in cart', 
+      error: error.message 
+    });
+  }
 });
 
 

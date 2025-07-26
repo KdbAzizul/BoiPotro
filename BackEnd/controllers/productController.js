@@ -5,44 +5,62 @@ import asyncHandler from "../middleware/asyncHandler.js";
 //@route    GET  /api/products
 //@access   public
 const getProducts = asyncHandler(async (req, res) => {
-  const result = await pool.query(`
-    SELECT 
-      b.id,
-      b.title,
-      b.price,
-      COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
-      COUNT(r.id) AS review_count,
-      bp.photo_url AS image,
-      ARRAY_AGG(DISTINCT a.name) AS authors,
-      ARRAY_AGG(DISTINCT c.name) AS categories,
-      p.name AS publisher
+  try {
+    console.log('Attempting to fetch products...');
+    console.log('Database config:', {
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      port: process.env.DB_PORT
+    });
+    
+    const result = await pool.query(`
+      SELECT 
+        b.id,
+        b.title,
+        b.price,
+        COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
+        COUNT(r.id) AS review_count,
+        bp.photo_url AS image,
+        ARRAY_AGG(DISTINCT a.name) AS authors,
+        ARRAY_AGG(DISTINCT c.name) AS categories,
+        p.name AS publisher
 
-    FROM "BOIPOTRO"."books" b
+      FROM "BOIPOTRO"."books" b
 
-    LEFT JOIN "BOIPOTRO"."book_photos" bp 
-      ON b.id = bp.book_id AND bp.photo_order = 1
+      LEFT JOIN "BOIPOTRO"."book_photos" bp 
+        ON b.id = bp.book_id AND bp.photo_order = 1
 
-    LEFT JOIN "BOIPOTRO"."reviews" r 
-      ON b.id = r.book_id
+      LEFT JOIN "BOIPOTRO"."reviews" r 
+        ON b.id = r.book_id
 
-    LEFT JOIN "BOIPOTRO"."bookauthors" ba 
-      ON b.id = ba.book_id
-    LEFT JOIN "BOIPOTRO"."authors" a 
-      ON ba.author_id = a.id
+      LEFT JOIN "BOIPOTRO"."bookauthors" ba 
+        ON b.id = ba.book_id
+      LEFT JOIN "BOIPOTRO"."authors" a 
+        ON ba.author_id = a.id
 
-    LEFT JOIN "BOIPOTRO"."book_categories" bc
-      ON b.id = bc.book_id
-    LEFT JOIN "BOIPOTRO"."categories" c
-      ON bc.category_id = c.id
+      LEFT JOIN "BOIPOTRO"."book_categories" bc
+        ON b.id = bc.book_id
+      LEFT JOIN "BOIPOTRO"."categories" c
+        ON bc.category_id = c.id
 
-    LEFT JOIN "BOIPOTRO"."publishers" p 
-      ON b.publisher_id = p.id
+      LEFT JOIN "BOIPOTRO"."publishers" p 
+        ON b.publisher_id = p.id
 
-    GROUP BY b.id, b.title, b.price, bp.photo_url, p.name
-    ORDER BY b.id;
-  `);
+      GROUP BY b.id, b.title, b.price, bp.photo_url, p.name
+      ORDER BY b.id;
+    `);
 
-  res.json(result.rows);
+    console.log(`Successfully fetched ${result.rows.length} products`);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error in getProducts:', error);
+    res.status(500).json({ 
+      message: 'Database error', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
 });
 
 //@desc     Fetch a product by id
