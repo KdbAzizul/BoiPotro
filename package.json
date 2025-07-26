@@ -9,7 +9,7 @@
     "server": "nodemon BackEnd/server.js",
     "client": "npm run start --prefix FrontEnd",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "postinstall": "npm install --prefix FrontEnd && npm run build --prefix FrontEnd"
+    "postinstall": "npm install --prefix FrontEnd && npx --prefix FrontEnd vite build"
   },
   "repository": {
     "type": "git",
