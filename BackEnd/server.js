@@ -2,6 +2,7 @@ import express from 'express'
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import cors from 'cors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.resolve();
@@ -21,6 +22,14 @@ import pool from './db.js';
 
 const app=express();
 
+// CORS middleware
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://boipotro.onrender.com', 'http://localhost:3000'] 
+    : 'http://localhost:5173',
+  credentials: true
+}));
+
 //Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({extended:true}));
@@ -36,6 +45,19 @@ app.use('/api/cart',cartRoutes);
 app.use('/api/orders',orderRoutes);
 app.use('/api/payment',paymentRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Debug route to test API
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'API is working!', timestamp: new Date().toISOString() });
+});
+
+// Log all requests in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.path}`);
+    next();
+  });
+}
 
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
