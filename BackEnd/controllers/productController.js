@@ -49,7 +49,11 @@ const getProducts = asyncHandler(async (req, res) => {
 //@route    GET  /api/products/:id
 //@access   public
 const getProductsById = asyncHandler(async (req, res) => {
-  const id = req.params.id;
+  const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) {
+    return res.status(400).json({ message: "Invalid product ID" });
+  }
 
   const client = await pool.connect();
 

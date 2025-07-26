@@ -28,6 +28,7 @@ import ProfileScreen from "./screens/ProfileScreen.jsx";
 import ProfileEditScreen from "./screens/ProfileEditScreen.jsx";
 import ProductForm from "./screens/admin/ProductFormScreen.jsx";
 import UserListScreen from "./screens/admin/UserListScreen.jsx";
+import AdminDashboardScreen from "./screens/admin/AdminDashboardScreen.jsx";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -54,6 +55,7 @@ const router = createBrowserRouter(
         <Route path="/admin/userlist" element={<UserListScreen />} />
         <Route path="/admin/productlist" element={<ProductListScreen />} />
         <Route path="/admin/product/create" element={<ProductForm />} />
+        <Route path="/admin/dashboard" element={<AdminDashboardScreen />} />
         <Route
           path="/admin/product/edit/:id"
           element={<ProductForm isEdit={true} />}

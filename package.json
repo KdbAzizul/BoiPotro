@@ -5,11 +5,12 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node BackEnd/server.js",
+    "build:frontend": "cd FrontEnd && npm install && npm run build",
+    "heroku-postbuild": "npm run build:frontend",
+    "start": "cd BackEnd && npm install && NODE_ENV=production node server.js",
     "server": "nodemon BackEnd/server.js",
-    "client": "npm run start --prefix FrontEnd",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "postinstall": "npm install --prefix FrontEnd && npx --prefix FrontEnd vite build"
+    "client": "npm run dev --prefix FrontEnd",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
   },
   "repository": {
     "type": "git",
