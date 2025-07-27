@@ -83,6 +83,9 @@ const OrderScreen = () => {
   };
 
   const cancelOrderHandler = async () => {
+
+    const confirmed = window.confirm("Are you sure you want to cancel this order?");
+    if (!confirmed) return;
     try {
       await cancelOrder(order.cart_id).unwrap();
       refetch(); // Refresh order details

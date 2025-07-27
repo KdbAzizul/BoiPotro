@@ -169,7 +169,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const getUsers = asyncHandler(async (req, res) => {
   const result = await pool.query(
-    `SELECT id, name, email, isadmin AS "isAdmin"
+    `SELECT id, name, email,level, isadmin AS "isAdmin"
      FROM "BOIPOTRO"."users"
      ORDER BY id`
   );

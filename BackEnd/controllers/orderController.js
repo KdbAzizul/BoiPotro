@@ -546,6 +546,20 @@ const cancelOrder = asyncHandler(async (req, res) => {
       [cancelledStateId, cartId]
     );
 
+    // 1. Get all items in the order
+    const itemsResult = await client.query(
+      `SELECT book_id, quantity FROM "BOIPOTRO"."cartitems" WHERE cart_id = $1`,
+      [cartId]
+    );
+
+    // 2. For each item, increase the stock in the books table
+    for (const item of itemsResult.rows) {
+      await client.query(
+        `UPDATE "BOIPOTRO"."books" SET stock = stock + $1 WHERE id = $2`,
+        [item.quantity, item.book_id]
+      );
+    }
+
     res.json({ message: "Order cancelled successfully" });
   } catch (err) {
     console.error("Failed to cancel order:", err);
@@ -627,6 +641,8 @@ const getOrders = asyncHandler(async (req, res) => {
     client.release();
   }
 });
+
+
 
 export {
   validateCoupon,
