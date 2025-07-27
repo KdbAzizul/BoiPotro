@@ -1,0 +1,105 @@
+.sidebar {
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  padding: 20px;
+  border-right: 1px solid #dee2e6;
+}
+
+.sidebar-title {
+  color: #333;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.sidebar h5 {
+  color: #495057;
+  font-size: 1rem;
+  margin-bottom: 15px;
+}
+
+.sidebar .form-check {
+  margin-bottom: 8px;
+}
+
+.sidebar .form-check-label {
+  color: #6c757d;
+  cursor: pointer;
+}
+
+.sidebar .form-check-input:checked + .form-check-label {
+  color: #0d6efd;
+}
+
+.sidebar .form-control,
+.sidebar .form-select {
+  margin-bottom: 10px;
+}
+
+.sidebar .form-control:focus,
+.sidebar .form-select:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* New styles for advanced filter */
+.scrollable-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 5px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.scrollable-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.scrollable-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.scrollable-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.search-box {
+  position: relative;
+}
+
+.search-box .form-control {
+  padding-right: 30px;
+}
+
+.filter-actions {
+  margin-top: 20px;
+}
+
+/* Accordion styles */
+.accordion-button:not(.collapsed) {
+  background-color: rgba(13, 110, 253, 0.1);
+  color: #0d6efd;
+}
+
+.accordion-button:focus {
+  box-shadow: none;
+  border-color: rgba(13, 110, 253, 0.25);
+}
+
+.accordion-body {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.text-muted {
+  font-style: italic;
+  font-size: 0.9rem;
+}

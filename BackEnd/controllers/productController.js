@@ -63,6 +63,179 @@ const getProducts = asyncHandler(async (req, res) => {
   }
 });
 
+//@desc     Get all categories
+//@route    GET  /api/products/categories
+//@access   public
+const getCategories = asyncHandler(async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name FROM "BOIPOTRO"."categories" ORDER BY name'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ message: 'Failed to fetch categories' });
+  }
+});
+
+//@desc     Get all authors
+//@route    GET  /api/products/authors
+//@access   public
+const getAuthors = asyncHandler(async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name FROM "BOIPOTRO"."authors" ORDER BY name'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching authors:', error);
+    res.status(500).json({ message: 'Failed to fetch authors' });
+  }
+});
+
+//@desc     Get all publishers
+//@route    GET  /api/products/publishers
+//@access   public
+const getPublishers = asyncHandler(async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name FROM "BOIPOTRO"."publishers" ORDER BY name'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching publishers:', error);
+    res.status(500).json({ message: 'Failed to fetch publishers' });
+  }
+});
+
+//@desc     Get filtered products
+//@route    GET  /api/products/filter
+//@access   public
+const getFilteredProducts = asyncHandler(async (req, res) => {
+  try {
+    const { categories, authors, publishers, minPrice, maxPrice, rating, sortBy, keyword } = req.query;
+
+    let query = `
+      SELECT DISTINCT
+        b.id,
+        b.title,
+        b.price,
+        COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
+        COUNT(r.id) AS review_count,
+        bp.photo_url AS image,
+        ARRAY_AGG(DISTINCT a.name) AS authors,
+        ARRAY_AGG(DISTINCT c.name) AS categories,
+        p.name AS publisher
+      FROM "BOIPOTRO"."books" b
+      LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.book_id AND bp.photo_order = 1
+      LEFT JOIN "BOIPOTRO"."reviews" r ON b.id = r.book_id
+      LEFT JOIN "BOIPOTRO"."bookauthors" ba ON b.id = ba.book_id
+      LEFT JOIN "BOIPOTRO"."authors" a ON ba.author_id = a.id
+      LEFT JOIN "BOIPOTRO"."book_categories" bc ON b.id = bc.book_id
+      LEFT JOIN "BOIPOTRO"."categories" c ON bc.category_id = c.id
+      LEFT JOIN "BOIPOTRO"."publishers" p ON b.publisher_id = p.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+    let paramCount = 1;
+
+    if (categories) {
+      const categoryIds = categories.split(',');
+      query += ` AND bc.category_id IN (
+        WITH RECURSIVE subcategories AS (
+          SELECT id FROM "BOIPOTRO"."categories" WHERE id = ANY($${paramCount})
+          UNION
+          SELECT cr.child_id 
+          FROM "BOIPOTRO"."category_relations" cr
+          JOIN subcategories s ON cr.parent_id = s.id
+        )
+        SELECT id FROM subcategories
+      )`;
+      params.push(categoryIds);
+      paramCount++;
+    }
+
+    if (authors) {
+      const authorIds = authors.split(',');
+      query += ` AND ba.author_id = ANY($${paramCount})`;
+      params.push(authorIds);
+      paramCount++;
+    }
+
+    if (publishers) {
+      const publisherIds = publishers.split(',');
+      query += ` AND b.publisher_id = ANY($${paramCount})`;
+      params.push(publisherIds);
+      paramCount++;
+    }
+
+    if (minPrice) {
+      query += ` AND b.price >= $${paramCount}`;
+      params.push(parseFloat(minPrice));
+      paramCount++;
+    }
+
+    if (maxPrice) {
+      query += ` AND b.price <= $${paramCount}`;
+      params.push(parseFloat(maxPrice));
+      paramCount++;
+    }
+
+    // Rating will be handled in HAVING clause after GROUP BY
+
+    // Add keyword search if provided
+    if (keyword) {
+      const searchTerm = `%${keyword}%`;
+      query += ` AND (
+        b.title ILIKE $${paramCount} OR
+        b.description ILIKE $${paramCount} OR
+        a.name ILIKE $${paramCount} OR
+        c.name ILIKE $${paramCount} OR
+        p.name ILIKE $${paramCount}
+      )`;
+      params.push(searchTerm);
+      paramCount++;
+    }
+
+    query += `
+      GROUP BY b.id, b.title, b.price, bp.photo_url, p.name
+    `;
+    
+    // Add rating filter in HAVING clause
+    if (rating) {
+      query += ` HAVING COALESCE(ROUND(AVG(r.rating), 1), 0) >= $${paramCount}`;
+      params.push(parseFloat(rating));
+      paramCount++;
+    }
+
+    // Add sorting based on sortBy parameter
+    if (sortBy) {
+      switch (sortBy) {
+        case 'price_asc':
+          query += ` ORDER BY b.price ASC`;
+          break;
+        case 'price_desc':
+          query += ` ORDER BY b.price DESC`;
+          break;
+        case 'rating_desc':
+          query += ` ORDER BY star DESC`;
+          break;
+        default:
+          query += ` ORDER BY b.id`;
+      }
+    } else {
+      query += ` ORDER BY b.id`;
+    }
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error in getFilteredProducts:', error);
+    res.status(500).json({ message: 'Failed to fetch filtered products' });
+  }
+});
+
 //@desc     Fetch a product by id
 //@route    GET  /api/products/:id
 //@access   public
@@ -147,23 +320,6 @@ const getProductsById = asyncHandler(async (req, res) => {
   }
 });
 
-// // @desc Get books by category
-// // @route GET /api/books/category/:categoryId
-// // @access Public
-// const getBooksByCategory = asyncHandler(async (req, res) => {
-//   const { categoryId } = req.params;
-
-//   const result = await pool.query(
-//     `SELECT b.*,bc.category_id FROM "BOIPOTRO".books b JOIN "BOIPOTRO".book_categories bc ON b.id = bc.book_id WHERE bc.category_id = $1`,
-//     [categoryId]
-//   );
-
-//   res.json(result.rows);
-// });
-
-// @desc Get books by category and its subcategories
-// @route GET /api/products/category/:categoryId
-// @access Public
 const getBooksByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
 
@@ -344,6 +500,7 @@ const createProductReview = asyncHandler(async (req, res) => {
     res.status(404).json({ message: "Resource not found" });
   }
 });
+
 // @desc create a book
 // @route POST /api/products
 // @access Private/Admin
@@ -378,6 +535,7 @@ const createProduct = asyncHandler(async (req, res) => {
 
   res.status(201).json(result.rows[0]);
 });
+
 // @desc update a book info
 // @route PUT /api/products/:id
 // @access Private/Admin
@@ -423,6 +581,7 @@ const updateProduct = asyncHandler(async (req, res) => {
 
   res.json(updated.rows[0]);
 });
+
 // @desc update a book info
 // @route DELETE /api/products/:id
 // @access Private/Admin
@@ -451,4 +610,8 @@ export {
   createProduct,
   updateProduct,
   deleteProduct,
+  getCategories,
+  getAuthors,
+  getPublishers,
+  getFilteredProducts,
 };
