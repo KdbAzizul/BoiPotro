@@ -479,8 +479,84 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
   res.send("Update order to paid");
 });
 
+// @desc       Cancel order (user can cancel unpaid orders within 6 hours)
+// @route      PUT /api/orders/:id/cancel
+// @access     private
+const cancelOrder = asyncHandler(async (req, res) => {
+  const cartId = req.params.id;
+  const userId = req.user.id;
+
+  const client = await pool.connect();
+
+  try {
+    // Get order details
+    const orderResult = await client.query(
+      `SELECT c.id, c.user_id, c.is_paid, c.created_at, c.state_id, cs.name as state_name
+       FROM "BOIPOTRO"."cart" c
+       JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
+       WHERE c.id = $1`,
+      [cartId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderResult.rows[0];
+
+    // Check if user owns this order
+    if (order.user_id !== userId) {
+      return res.status(403).json({ error: "Not authorized to cancel this order" });
+    }
+
+    // Check if order is already cancelled
+    if (order.state_name === 'cancelled') {
+      return res.status(400).json({ error: "Order is already cancelled" });
+    }
+
+    // Check if order is paid
+    if (order.is_paid) {
+      return res.status(400).json({ error: "Cannot cancel paid orders" });
+    }
+
+    // Check if order is in cancellable states (pending or processing)
+    if (!['pending', 'processing'].includes(order.state_name)) {
+      return res.status(400).json({ error: "Order cannot be cancelled in current state" });
+    }
+
+    // Check if order is within 6 hours
+    const orderTime = new Date(order.created_at);
+    const currentTime = new Date();
+    const timeDifference = currentTime - orderTime;
+    const sixHoursInMs = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+
+    if (timeDifference > sixHoursInMs) {
+      return res.status(400).json({ error: "Order can only be cancelled within 6 hours of placement" });
+    }
+
+    // Get cancelled state ID
+    const cancelledStateResult = await client.query(
+      `SELECT id FROM "BOIPOTRO"."cart_states" WHERE name = 'cancelled'`
+    );
+    const cancelledStateId = cancelledStateResult.rows[0].id;
+
+    // Update order state to cancelled
+    await client.query(
+      `UPDATE "BOIPOTRO"."cart" SET state_id = $1 WHERE id = $2`,
+      [cancelledStateId, cartId]
+    );
+
+    res.json({ message: "Order cancelled successfully" });
+  } catch (err) {
+    console.error("Failed to cancel order:", err);
+    res.status(500).json({ error: "Could not cancel order" });
+  } finally {
+    client.release();
+  }
+});
+
 // @desc       Update order state
-// @route      GET /api/orders/:id/state
+// @route      PUT /api/orders/:id/state
 // @access     private/Admin
 const updateOrderState = async (req, res) => {
   const cartId = req.params.id;
@@ -557,6 +633,7 @@ export {
   addOrderItems,
   getMyOrders,
   getOrderById,
+  cancelOrder,
   updateOrderState,
   updateOrderToPaid,
   getOrders,

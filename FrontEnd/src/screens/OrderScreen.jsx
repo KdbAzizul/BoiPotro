@@ -11,7 +11,7 @@ import {
 import Message from "../components/Message";
 import Loader from "../components/Loader";
 import { useGetOrderDetailsQuery } from "../slices/ordersApiSlice";
-import { useUpdateOrderStateMutation } from "../slices/ordersApiSlice";
+import { useUpdateOrderStateMutation, useCancelOrderMutation } from "../slices/ordersApiSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -52,6 +52,8 @@ const OrderScreen = () => {
 
   const [updateOrderState, { isLoading: loadingState }] =
     useUpdateOrderStateMutation();
+  
+  const [cancelOrder, { isLoading: cancelLoading }] = useCancelOrderMutation();
 
   const updateStateHandler = async () => {
     if (!selectedState) return;
@@ -78,6 +80,41 @@ const OrderScreen = () => {
         variant: "danger",
       });
     }
+  };
+
+  const cancelOrderHandler = async () => {
+    try {
+      await cancelOrder(order.cart_id).unwrap();
+      refetch(); // Refresh order details
+      setToast({
+        show: true,
+        message: "Order cancelled successfully",
+        variant: "success",
+      });
+    } catch (err) {
+      console.error(err);
+      setToast({
+        show: true,
+        message: err?.data?.error || "Failed to cancel order",
+        variant: "danger",
+      });
+    }
+  };
+
+  // Check if order can be cancelled by user
+  const canCancelOrder = () => {
+    if (!order || userInfo?.isAdmin) return false;
+    
+    const orderTime = new Date(order.created_at);
+    const currentTime = new Date();
+    const timeDifference = currentTime - orderTime;
+    const sixHoursInMs = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+    
+    return (
+      !order.is_paid && 
+      ['pending', 'processing'].includes(order.state_name) &&
+      timeDifference <= sixHoursInMs
+    );
   };
 
   return isLoading ? (
@@ -171,6 +208,23 @@ const OrderScreen = () => {
                   <Col>${order.total_price}</Col>
                 </Row>
               </ListGroup.Item>
+
+              {/* Cancel Order Button for Users */}
+              {canCancelOrder() && (
+                <ListGroup.Item>
+                  <Button
+                    variant="danger"
+                    className="w-100"
+                    disabled={cancelLoading}
+                    onClick={cancelOrderHandler}
+                  >
+                    {cancelLoading ? "Cancelling..." : "Cancel Order"}
+                  </Button>
+                  <small className="text-muted d-block mt-2">
+                    * Orders can only be cancelled within 6 hours of placement
+                  </small>
+                </ListGroup.Item>
+              )}
 
               {/* PAY ORDER PLACEHOLDER */}
               {userInfo && userInfo.isAdmin && (

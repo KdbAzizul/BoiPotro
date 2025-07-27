@@ -3,6 +3,7 @@ import {
     addOrderItems,
     getMyOrders,
     getOrderById,
+    cancelOrder,
     updateOrderState,
     updateOrderToPaid,
     getOrders,
@@ -15,6 +16,7 @@ const router =express.Router();
 router.route('/validateCoupon').post(protect,validateCoupon);
 router.route('/mine').get(protect,getMyOrders);
 router.route('/:id').get(protect,getOrderById);
+router.route('/:id/cancel').put(protect,cancelOrder);
 router.route('/:id/pay').put(protect,updateOrderToPaid);
 router.route('/:id/state').put(protect,admin,updateOrderState);
 router.route('/').post(protect,addOrderItems).get(protect,admin,getOrders);

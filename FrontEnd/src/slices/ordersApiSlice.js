@@ -43,6 +43,12 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       }),
       keepUnusedDataFor:5
     }),
+    cancelOrder: builder.mutation({
+      query: (orderId) => ({
+        url: `${ORDERS_URL}/${orderId}/cancel`,
+        method: "PUT",
+      }),
+    }),
 
 
   }),
@@ -55,4 +61,5 @@ export const {
   useGetOrdersQuery,
   useUpdateOrderStateMutation,
   useGetMyOrdersQuery,
+  useCancelOrderMutation,
 } = ordersApiSlice;
