@@ -188,11 +188,11 @@ export const createOrder = async ({
 
 
  const addOrderItems = asyncHandler(async (req, res) => {
-  const { cartItems, shippingAddress, paymentMethod, couponName, totalPrice } = req.body;
+  const { cartItems, shippingAddress, paymentMethod, couponName, totalPrice, is_paid } = req.body;
 
   const user_id = req.user.id;
   let tran_id = req.body.tran_id || uuidv4();
-  const is_paid = !!req.body.tran_id;
+  const orderIsPaid = is_paid !== undefined ? is_paid : !!req.body.tran_id;
 
   if (!cartItems || cartItems.length === 0) {
     res.status(400);
@@ -207,7 +207,7 @@ export const createOrder = async ({
     couponName,
     totalPrice,
     tran_id,
-    is_paid,
+    is_paid: orderIsPaid,
   });
 
   res.status(201).json({ message: "Order created", id: cart_id });

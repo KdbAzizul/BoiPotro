@@ -51,6 +51,40 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'API is working!', timestamp: new Date().toISOString() });
 });
 
+// Database test route
+app.get('/api/db-test', async (req, res) => {
+  try {
+    console.log('Testing database connection...');
+    console.log('Environment variables:', {
+      DB_USER: process.env.DB_USER ? 'SET' : 'NOT SET',
+      DB_HOST: process.env.DB_HOST ? 'SET' : 'NOT SET',
+      DB_NAME: process.env.DB_NAME ? 'SET' : 'NOT SET',
+      DB_PORT: process.env.DB_PORT ? 'SET' : 'NOT SET',
+      DB_PASS: process.env.DB_PASS ? 'SET' : 'NOT SET'
+    });
+    
+    const result = await pool.query('SELECT NOW() as current_time');
+    res.json({ 
+      message: 'Database connection successful!', 
+      timestamp: result.rows[0].current_time,
+      env: {
+        DB_USER: process.env.DB_USER ? 'SET' : 'NOT SET',
+        DB_HOST: process.env.DB_HOST ? 'SET' : 'NOT SET',
+        DB_NAME: process.env.DB_NAME ? 'SET' : 'NOT SET',
+        DB_PORT: process.env.DB_PORT ? 'SET' : 'NOT SET'
+      }
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({ 
+      message: 'Database connection failed', 
+      error: error.message,
+      code: error.code,
+      detail: error.detail
+    });
+  }
+});
+
 // Log all requests in production
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {

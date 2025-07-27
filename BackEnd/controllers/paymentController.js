@@ -307,7 +307,7 @@ export const paymentSuccess = async (req, res) => {
 
   // console.log("Validated SSL Data:", sslData);
 
-  const card_type =  "Unknown";
+  const card_type =  "SSLCommerz";
 
   try {
     const tempRes = await pool.query(

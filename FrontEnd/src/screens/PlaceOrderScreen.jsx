@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { Button, Row, Col, ListGroup, Image, Card } from "react-bootstrap";
+import { Button, Row, Col, ListGroup, Image, Card, Form } from "react-bootstrap";
 import CheckoutSteps from "../components/CheckoutSteps";
 import { toast } from "react-toastify";
 import Message from "../components/Message";
@@ -11,6 +11,7 @@ import {
   useValidateCouponMutation,
 } from "../slices/ordersApiSlice";
 import { useGetCartQuery, useClearCartMutation } from "../slices/cartApiSlice";
+import { saveShippingAddress, savePaymentMethod } from "../slices/cartSlice";
 
 const PlaceOrderScreen = () => {
   const navigate = useNavigate();
@@ -22,6 +23,18 @@ const PlaceOrderScreen = () => {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [newTotal, setNewTotal] = useState(0);
 
+  // Shipping address state
+  const { shippingAddress, paymentMethod } = useSelector((state) => state.cart);
+  const [address, setAddress] = useState(shippingAddress?.address || "");
+  const [city, setCity] = useState(shippingAddress?.city || "");
+  const [postalCode, setPostalCode] = useState(shippingAddress?.postalCode || "");
+  const [country, setCountry] = useState(shippingAddress?.country || "");
+  const [fullName, setFullName] = useState(shippingAddress?.fullName || "");
+  const [phone, setPhone] = useState(shippingAddress?.phone || "");
+
+  // Payment method state
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(paymentMethod || "SSLCommerz");
+
   useEffect(() => {
     if (cart?.totalPrice) {
       setNewTotal(cart.totalPrice);
@@ -29,16 +42,14 @@ const PlaceOrderScreen = () => {
   }, [cart?.totalPrice]);
 
   const [createOrder, { isLoading, error }] = useCreateOrderMutation();
-
-  const [validateCoupon, { isLoading: validatingCoupon }] =
-    useValidateCouponMutation();
+  const [validateCoupon, { isLoading: validatingCoupon }] = useValidateCouponMutation();
+  const [clearCart] = useClearCartMutation();
 
   const applyCouponHandler = async () => {
     console.log("🔍 applyCouponHandler triggered");
     try {
       const res = await validateCoupon({
         code: couponCode,
-        //cart_total: cart.totalPrice,
       }).unwrap();
 
       console.log("🔁 Coupon validation response:", res);
@@ -47,7 +58,6 @@ const PlaceOrderScreen = () => {
         setCouponApplied(true);
         setDiscountAmount(res.discount.final_discount_amount);
         setNewTotal(res.new_total);
-        // ✅ Log directly from response
         console.log("✔️ Coupon applied:");
         console.log("New total:", res.new_total);
         console.log("Discount:", res.discount.final_discount_amount);
@@ -62,139 +72,186 @@ const PlaceOrderScreen = () => {
     }
   };
 
-  const { shippingAddress, paymentMethod } = useSelector((state) => state.cart);
-  useEffect(() => {
-    if (!shippingAddress?.address) {
-      navigate("/shipping");
-    } else if (!paymentMethod) {
-      navigate("/payment");
-    }
-  }, [shippingAddress, paymentMethod, navigate]);
-
-  // useEffect(() => {
-  //   if (!cart.shippingAddress.address) {
-  //     navigate("/shipping");
-  //   } else if (!cart.paymentMethod) {
-  //     navigate("/payment");
-  //   }
-  // }, [cart.paymentMethod, cart.shippingAddress.address, navigate]);
-
-  const [clearCart] = useClearCartMutation();
-
   const placeOrderHandler = async () => {
-    try {
-      const response = await fetch("/api/payment/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    // Validate shipping address
+    if (!address || !city || !postalCode || !country || !fullName || !phone) {
+      toast.error("Please fill in all shipping address fields");
+      return;
+    }
+
+    // Save shipping address and payment method to Redux
+    const shippingData = { address, city, postalCode, country, fullName, phone };
+    dispatch(saveShippingAddress(shippingData));
+    dispatch(savePaymentMethod(selectedPaymentMethod));
+
+    if (selectedPaymentMethod === "SSLCommerz") {
+      // Handle SSLCommerz payment
+      try {
+        const response = await fetch("/api/payment/init", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cartItems: cart.cartItems,
+            shippingAddress: shippingData,
+            totalPrice: newTotal,
+            couponName: couponApplied ? couponCode : null,
+          }),
+        });
+        console.log("📡 Response Status:", response.status);
+        const data = await response.json();
+        console.log("💳 Payment Init Response:", data);
+
+        if (data.GatewayPageURL) {
+          window.location.href = data.GatewayPageURL;
+        } else {
+          toast.error("Payment gateway failed to respond");
+        }
+      } catch (err) {
+        toast.error("Something went wrong with payment init");
+        console.error(err);
+      }
+    } else {
+      // Handle Cash on Delivery
+      try {
+        const res = await createOrder({
           cartItems: cart.cartItems,
-          shippingAddress,
+          shippingAddress: shippingData,
+          paymentMethod: selectedPaymentMethod,
           totalPrice: newTotal,
           couponName: couponApplied ? couponCode : null,
-        }),
-      });
-      console.log("📡 Response Status:", response.status);
-      const data = await response.json();
-      console.log("💳 Payment Init Response:", data);
+          is_paid: false, // Cash on delivery is not paid initially
+        }).unwrap();
 
-      if (data.GatewayPageURL) {
-        window.location.href = data.GatewayPageURL;
-      } else {
-        toast.error("Payment gateway failed to respond");
+        await clearCart().unwrap();
+        navigate(`/order/${res.id}`);
+        toast.success("Order placed successfully! Pay on delivery.");
+      } catch (error) {
+        toast.error(error?.data?.message || "Order creation failed");
+        console.error(error);
       }
-    } catch (err) {
-      toast.error("Something went wrong with payment init");
-      console.error(err);
     }
   };
-
-  // const placeOrderHandler = async () => {
-  //   try {
-  //     const res = await createOrder({
-  //       cartItems: cart.cartItems,
-  //       shippingAddress,
-  //       paymentMethod,
-  //       totalPrice: newTotal,
-  //       couponName: couponApplied ? couponCode : null,
-  //     }).unwrap();
-
-  //     const orderId = res.id;
-
-  //     const paymentRes = await fetch("/api/payment/init", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({
-  //         totalAmount: newTotal,
-  //         orderId: orderId,
-  //         customer: {
-  //           name: shippingAddress.fullName || "Customer",
-  //           email: "guest@example.com",
-  //           address: shippingAddress.address,
-  //           city: shippingAddress.city,
-  //           postalCode: shippingAddress.postalCode,
-  //           country: shippingAddress.country,
-  //           phone: shippingAddress.phone || "01700000000",
-  //         },
-  //       }),
-  //     });
-  //     console.log("📡 Response Status:", paymentRes.status);
-  //     const paymentData = await paymentRes.json();
-  //     console.log("💳 Payment Init Response:", paymentData);
-
-  //     if (paymentData.GatewayPageURL) {
-  //       await clearCart().unwrap();
-  //       window.location.href = paymentData.GatewayPageURL;
-
-  //     } else {
-  //       toast.error("Payment gateway init failed");
-  //     }
-  //   } catch (error) {
-  //     toast.error("Order creation or payment failed");
-  //     console.error(error);
-  //   }
-  // };
-
-  // const placeOrderHandler = async () => {
-  //   try {
-  //     const res = await createOrder({
-  //       cartItems: cart.cartItems,
-  //       shippingAddress,
-  //       paymentMethod,
-  //       totalPrice: newTotal, // Use discounted total
-  //       couponName: couponApplied ? couponCode : null,
-  //     }).unwrap();
-
-  //     await clearCart().unwrap();
-  //     //dispatch(clearCartItems());
-  //     navigate(`/order/${res.id}`);
-  //   } catch (error) {
-  //     toast.error(error);
-  //   }
-  // };
 
   if (cartLoading) return <Loader />;
 
   return (
     <>
-      <CheckoutSteps step1 step2 step3 step4 />
+      <CheckoutSteps step1 step2 step3 />
       <Row>
         <Col md={8}>
           <ListGroup variant="flush">
+            {/* Shipping Address Form */}
             <ListGroup.Item>
-              <h2>Shipping</h2>
-              <p>
-                <strong>Address : </strong>
-                {shippingAddress.address},{shippingAddress.city},
-                {shippingAddress.postalCode},{shippingAddress.country}
-              </p>
+              <h2>Shipping Address</h2>
+              <Form>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group controlId="fullName" className="my-2">
+                      <Form.Label>Full Name</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Enter Full Name"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group controlId="phone" className="my-2">
+                      <Form.Label>Phone Number</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Enter Phone Number"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Form.Group controlId="address" className="my-2">
+                  <Form.Label>Address</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="Enter Address"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    required
+                  />
+                </Form.Group>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group controlId="city" className="my-2">
+                      <Form.Label>City</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Enter City"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="postalCode" className="my-2">
+                      <Form.Label>Postal Code</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Enter Postal Code"
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="country" className="my-2">
+                      <Form.Label>Country</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Enter Country"
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Form>
             </ListGroup.Item>
 
+            {/* Payment Method Selection */}
             <ListGroup.Item>
               <h2>Payment Method</h2>
-              <strong>Method : </strong>
-              {paymentMethod}
+              <Form.Group>
+                <Form.Label as="legend">Select Payment Method</Form.Label>
+                <Col>
+                  <Form.Check
+                    type="radio"
+                    className="my-2"
+                    label="SSLCommerz (Credit Card, Mobile Banking, etc.)"
+                    id="SSLCommerz"
+                    name="paymentMethod"
+                    value="SSLCommerz"
+                    checked={selectedPaymentMethod === "SSLCommerz"}
+                    onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                  />
+                  <Form.Check
+                    type="radio"
+                    className="my-2"
+                    label="Cash on Delivery"
+                    id="CashOnDelivery"
+                    name="paymentMethod"
+                    value="Cash on Delivery"
+                    checked={selectedPaymentMethod === "Cash on Delivery"}
+                    onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                  />
+                </Col>
+              </Form.Group>
             </ListGroup.Item>
 
+            {/* Order Items */}
             <ListGroup.Item>
               <h2>Order Items</h2>
               {cart.cartItems.length === 0 ? (
@@ -215,7 +272,6 @@ const PlaceOrderScreen = () => {
                         <Col>
                           <Link to={`/product/${item.id}`}>{item.title}</Link>
                         </Col>
-
                         <Col md={4}>
                           {item.quantity} X ${item.finalPrice} = $
                           {(item.quantity * item.finalPrice).toFixed(2)}
@@ -253,9 +309,8 @@ const PlaceOrderScreen = () => {
               <ListGroup.Item>
                 <Row>
                   <Col>
-                    <input
+                    <Form.Control
                       type="text"
-                      className="form-control"
                       placeholder="Enter coupon code"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value)}
@@ -312,10 +367,10 @@ const PlaceOrderScreen = () => {
                 <Button
                   type="button"
                   className="btn-block"
-                  disabled={cart.cartItems.length === 0}
+                  disabled={cart.cartItems.length === 0 || isLoading}
                   onClick={placeOrderHandler}
                 >
-                  Place Order
+                  {isLoading ? "Processing..." : "Place Order"}
                 </Button>
 
                 {isLoading && <Loader />}

@@ -10,7 +10,8 @@
     "start": "cd BackEnd && npm install && NODE_ENV=production node server.js",
     "server": "nodemon BackEnd/server.js",
     "client": "npm run dev --prefix FrontEnd",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "setup-db": "node setup-database.js"
   },
   "repository": {
     "type": "git",
