@@ -108,6 +108,9 @@ const OrderScreen = () => {
   const canCancelOrder = () => {
     if (!order || userInfo?.isAdmin) return false;
     
+    // Don't allow cancellation for SSLCommerz payments
+    if (order.payment_method === 'SSLCommerz') return false;
+    
     const orderTime = new Date(order.created_at);
     const currentTime = new Date();
     const timeDifference = currentTime - orderTime;

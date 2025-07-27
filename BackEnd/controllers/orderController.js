@@ -491,7 +491,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
   try {
     // Get order details
     const orderResult = await client.query(
-      `SELECT c.id, c.user_id, c.is_paid, c.created_at, c.state_id, cs.name as state_name
+      `SELECT c.id, c.user_id, c.is_paid, c.created_at, c.state_id, cs.name as state_name, c.payment_method
        FROM "BOIPOTRO"."cart" c
        JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
        WHERE c.id = $1`,
@@ -514,9 +514,9 @@ const cancelOrder = asyncHandler(async (req, res) => {
       return res.status(400).json({ error: "Order is already cancelled" });
     }
 
-    // Check if order is paid
-    if (order.is_paid) {
-      return res.status(400).json({ error: "Cannot cancel paid orders" });
+    // Check if order is paid or is SSLCommerz
+    if (order.is_paid || order.payment_method === 'SSLCommerz') {
+      return res.status(400).json({ error: "Cannot cancel paid orders or orders paid with SSLCommerz" });
     }
 
     // Check if order is in cancellable states (pending or processing)

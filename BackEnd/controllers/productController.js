@@ -1,11 +1,15 @@
 import pool from "../db.js";
 import asyncHandler from "../middleware/asyncHandler.js";
 
-//@desc     Fetch all products
+//@desc     Fetch all products with pagination
 //@route    GET  /api/products
 //@access   public
 const getProducts = asyncHandler(async (req, res) => {
   try {
+    const pageSize = Number(req.query.pageSize) || 8; // Default page size is 8
+    const page = Number(req.query.page) || 1; // Default page is 1
+    const keyword = req.query.keyword || '';
+    
     console.log('Attempting to fetch products...');
     console.log('Database config:', {
       user: process.env.DB_USER,
@@ -14,7 +18,36 @@ const getProducts = asyncHandler(async (req, res) => {
       port: process.env.DB_PORT
     });
     
-    const result = await pool.query(`
+    // First, get the total count of products
+    let countQuery = `
+      SELECT COUNT(DISTINCT b.id) as total
+      FROM "BOIPOTRO"."books" b
+    `;
+    
+    const params = [];
+    
+    // Add keyword search if provided
+    if (keyword) {
+      countQuery += `
+        LEFT JOIN "BOIPOTRO"."bookauthors" ba ON b.id = ba.book_id
+        LEFT JOIN "BOIPOTRO"."authors" a ON ba.author_id = a.id
+        LEFT JOIN "BOIPOTRO"."book_categories" bc ON b.id = bc.book_id
+        LEFT JOIN "BOIPOTRO"."categories" c ON bc.category_id = c.id
+        LEFT JOIN "BOIPOTRO"."publishers" p ON b.publisher_id = p.id
+        WHERE b.title ILIKE $1 OR
+              b.description ILIKE $1 OR
+              a.name ILIKE $1 OR
+              c.name ILIKE $1 OR
+              p.name ILIKE $1
+      `;
+      params.push(`%${keyword}%`);
+    }
+    
+    const countResult = await pool.query(countQuery, params);
+    const total = parseInt(countResult.rows[0].total);
+    
+    // Then, get the paginated products
+    let query = `
       SELECT 
         b.id,
         b.title,
@@ -25,34 +58,45 @@ const getProducts = asyncHandler(async (req, res) => {
         ARRAY_AGG(DISTINCT a.name) AS authors,
         ARRAY_AGG(DISTINCT c.name) AS categories,
         p.name AS publisher
-
       FROM "BOIPOTRO"."books" b
-
-      LEFT JOIN "BOIPOTRO"."book_photos" bp 
-        ON b.id = bp.book_id AND bp.photo_order = 1
-
-      LEFT JOIN "BOIPOTRO"."reviews" r 
-        ON b.id = r.book_id
-
-      LEFT JOIN "BOIPOTRO"."bookauthors" ba 
-        ON b.id = ba.book_id
-      LEFT JOIN "BOIPOTRO"."authors" a 
-        ON ba.author_id = a.id
-
-      LEFT JOIN "BOIPOTRO"."book_categories" bc
-        ON b.id = bc.book_id
-      LEFT JOIN "BOIPOTRO"."categories" c
-        ON bc.category_id = c.id
-
-      LEFT JOIN "BOIPOTRO"."publishers" p 
-        ON b.publisher_id = p.id
-
+      LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.book_id AND bp.photo_order = 1
+      LEFT JOIN "BOIPOTRO"."reviews" r ON b.id = r.book_id
+      LEFT JOIN "BOIPOTRO"."bookauthors" ba ON b.id = ba.book_id
+      LEFT JOIN "BOIPOTRO"."authors" a ON ba.author_id = a.id
+      LEFT JOIN "BOIPOTRO"."book_categories" bc ON b.id = bc.book_id
+      LEFT JOIN "BOIPOTRO"."categories" c ON bc.category_id = c.id
+      LEFT JOIN "BOIPOTRO"."publishers" p ON b.publisher_id = p.id
+    `;
+    
+    // Add keyword search if provided
+    if (keyword) {
+      query += `
+        WHERE b.title ILIKE $1 OR
+              b.description ILIKE $1 OR
+              a.name ILIKE $1 OR
+              c.name ILIKE $1 OR
+              p.name ILIKE $1
+      `;
+    }
+    
+    query += `
       GROUP BY b.id, b.title, b.price, bp.photo_url, p.name
-      ORDER BY b.id;
-    `);
+      ORDER BY b.id
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2};
+    `;
+    
+    params.push(pageSize, (page - 1) * pageSize);
+    
+    const result = await pool.query(query, params);
 
-    console.log(`Successfully fetched ${result.rows.length} products`);
-    res.json(result.rows);
+    console.log(`Successfully fetched ${result.rows.length} products (page ${page} of ${Math.ceil(total / pageSize)})`);
+    
+    res.json({
+      products: result.rows,
+      page,
+      pages: Math.ceil(total / pageSize),
+      total
+    });
   } catch (error) {
     console.error('Error in getProducts:', error);
     res.status(500).json({ 
@@ -108,24 +152,29 @@ const getPublishers = asyncHandler(async (req, res) => {
   }
 });
 
-//@desc     Get filtered products
+//@desc     Get filtered products with pagination
 //@route    GET  /api/products/filter
 //@access   public
 const getFilteredProducts = asyncHandler(async (req, res) => {
   try {
-    const { categories, authors, publishers, minPrice, maxPrice, rating, sortBy, keyword } = req.query;
+    const { 
+      categories, 
+      authors, 
+      publishers, 
+      minPrice, 
+      maxPrice, 
+      rating, 
+      sortBy, 
+      keyword,
+      page = 1,
+      pageSize = 8
+    } = req.query;
 
-    let query = `
-      SELECT DISTINCT
-        b.id,
-        b.title,
-        b.price,
-        COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
-        COUNT(r.id) AS review_count,
-        bp.photo_url AS image,
-        ARRAY_AGG(DISTINCT a.name) AS authors,
-        ARRAY_AGG(DISTINCT c.name) AS categories,
-        p.name AS publisher
+    const pageNum = Number(page);
+    const pageSizeNum = Number(pageSize);
+
+    // Build the base query for filtering
+    let baseQuery = `
       FROM "BOIPOTRO"."books" b
       LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.book_id AND bp.photo_order = 1
       LEFT JOIN "BOIPOTRO"."reviews" r ON b.id = r.book_id
@@ -142,7 +191,7 @@ const getFilteredProducts = asyncHandler(async (req, res) => {
 
     if (categories) {
       const categoryIds = categories.split(',');
-      query += ` AND bc.category_id IN (
+      baseQuery += ` AND bc.category_id IN (
         WITH RECURSIVE subcategories AS (
           SELECT id FROM "BOIPOTRO"."categories" WHERE id = ANY($${paramCount})
           UNION
@@ -158,36 +207,34 @@ const getFilteredProducts = asyncHandler(async (req, res) => {
 
     if (authors) {
       const authorIds = authors.split(',');
-      query += ` AND ba.author_id = ANY($${paramCount})`;
+      baseQuery += ` AND ba.author_id = ANY($${paramCount})`;
       params.push(authorIds);
       paramCount++;
     }
 
     if (publishers) {
       const publisherIds = publishers.split(',');
-      query += ` AND b.publisher_id = ANY($${paramCount})`;
+      baseQuery += ` AND b.publisher_id = ANY($${paramCount})`;
       params.push(publisherIds);
       paramCount++;
     }
 
     if (minPrice) {
-      query += ` AND b.price >= $${paramCount}`;
+      baseQuery += ` AND b.price >= $${paramCount}`;
       params.push(parseFloat(minPrice));
       paramCount++;
     }
 
     if (maxPrice) {
-      query += ` AND b.price <= $${paramCount}`;
+      baseQuery += ` AND b.price <= $${paramCount}`;
       params.push(parseFloat(maxPrice));
       paramCount++;
     }
 
-    // Rating will be handled in HAVING clause after GROUP BY
-
     // Add keyword search if provided
     if (keyword) {
       const searchTerm = `%${keyword}%`;
-      query += ` AND (
+      baseQuery += ` AND (
         b.title ILIKE $${paramCount} OR
         b.description ILIKE $${paramCount} OR
         a.name ILIKE $${paramCount} OR
@@ -198,7 +245,24 @@ const getFilteredProducts = asyncHandler(async (req, res) => {
       paramCount++;
     }
 
-    query += `
+    // First, get the total count of filtered products
+    let countQuery = `SELECT COUNT(DISTINCT b.id) as total ${baseQuery}`;
+    const countResult = await pool.query(countQuery, params);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Then, get the paginated filtered products
+    let query = `
+      SELECT DISTINCT
+        b.id,
+        b.title,
+        b.price,
+        COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
+        COUNT(r.id) AS review_count,
+        bp.photo_url AS image,
+        ARRAY_AGG(DISTINCT a.name) AS authors,
+        ARRAY_AGG(DISTINCT c.name) AS categories,
+        p.name AS publisher
+      ${baseQuery}
       GROUP BY b.id, b.title, b.price, bp.photo_url, p.name
     `;
     
@@ -228,8 +292,18 @@ const getFilteredProducts = asyncHandler(async (req, res) => {
       query += ` ORDER BY b.id`;
     }
 
+    // Add pagination
+    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(pageSizeNum, (pageNum - 1) * pageSizeNum);
+
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    
+    res.json({
+      products: result.rows,
+      page: pageNum,
+      pages: Math.ceil(total / pageSizeNum),
+      total
+    });
   } catch (error) {
     console.error('Error in getFilteredProducts:', error);
     res.status(500).json({ message: 'Failed to fetch filtered products' });
@@ -405,10 +479,13 @@ const getBooksByAuthor = asyncHandler(async (req, res) => {
 });
 
 //@desc     Search books by any keyword (title, author, publisher, isbn, category)
-//@route    GET  /api/products/search?keyword=xyz
+//@route    GET  /api/products/search?keyword=xyz&pageNumber=1&pageSize=10
 //@access   public
 const searchProducts = asyncHandler(async (req, res) => {
-  const { keyword } = req.query;
+  const { keyword, pageNumber = 1, pageSize = 10 } = req.query;
+  const page = parseInt(pageNumber);
+  const limit = parseInt(pageSize);
+  const offset = (page - 1) * limit;
 
   if (!keyword || keyword.trim() === "") {
     return res.status(400).json({ message: "Please provide a search keyword" });
@@ -417,6 +494,31 @@ const searchProducts = asyncHandler(async (req, res) => {
   const searchPattern = `%${keyword}%`;
 
   try {
+    // First, get the total count of matching products
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(DISTINCT b.id) as total
+      FROM "BOIPOTRO".books b
+      LEFT JOIN "BOIPOTRO"."publishers" pub ON b.publisher_id = pub.id
+      LEFT JOIN "BOIPOTRO"."bookauthors" ba ON b.id = ba.book_id
+      LEFT JOIN "BOIPOTRO"."authors" a ON ba.author_id = a.id
+      LEFT JOIN "BOIPOTRO"."book_categories" bc ON b.id = bc.book_id
+      LEFT JOIN "BOIPOTRO"."categories" c ON bc.category_id = c.id
+      WHERE 
+        b.title ILIKE $1 OR
+        b.description ILIKE $1 OR
+        b.isbn ILIKE $1 OR
+        a.name ILIKE $1 OR
+        pub.name ILIKE $1 OR
+        c.name ILIKE $1
+      `,
+      [searchPattern]
+    );
+
+    const count = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(count / limit);
+
+    // Then, get the paginated products
     const result = await pool.query(
       `
       SELECT 
@@ -445,12 +547,18 @@ const searchProducts = asyncHandler(async (req, res) => {
         pub.name ILIKE $1 OR
         c.name ILIKE $1
       GROUP BY b.id, pub.name, bp.photo_url
-      ORDER BY b.id;
+      ORDER BY b.id
+      LIMIT $2 OFFSET $3;
       `,
-      [searchPattern]
+      [searchPattern, limit, offset]
     );
 
-    res.json(result.rows);
+    res.json({
+      products: result.rows,
+      page,
+      pages: totalPages,
+      count
+    });
   } catch (err) {
     console.error("Failed to search books:", err);
     res.status(500).json({ message: "Search failed due to server error" });
