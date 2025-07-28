@@ -605,10 +605,10 @@ const getOrders = asyncHandler(async (req, res) => {
     const ordersRes = await client.query(
       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address,
               c.state_id, c.created_at, u.name AS user_name, u.email AS user_email,
-              c.payment_method, cp.code AS coupon_code
+              c.payment_method,c.is_paid,cs.name AS state_name, cp.code AS coupon_code
        FROM "BOIPOTRO"."cart" c
        JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-       
+        LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
        ORDER BY c.created_at DESC`
     );

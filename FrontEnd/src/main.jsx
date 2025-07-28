@@ -60,7 +60,10 @@ const router = createBrowserRouter(
           path="/admin/product/edit/:id"
           element={<ProductForm isEdit={true} />}
         />
+
       </Route>
+      <Route path="/admin/page/:pageNumber" element={<ProductListScreen />} />
+<Route path="/admin/search/:keyword/page/:pageNumber" element={<ProductListScreen />} />
     </Route>
   )
 );

@@ -9,6 +9,16 @@ export const productsApiSlice = apiSlice.injectEndpoints({
           ? `${PRODUCTS_URL}/search?keyword=${keyword}&page=${pageNumber}&pageSize=${pageSize}`
           : `${PRODUCTS_URL}?page=${pageNumber}&pageSize=${pageSize}`,
       }),
+      transformResponse: (response) => {
+        // The response contains { products, page, pages, total }
+        // We need to return just the products array for the component
+          return {
+          products: response.products || [],
+          page: response.page || 1,
+          pages: response.pages || 1,
+          total: response.total || 0
+        };
+      },
       keepUnusedDataFor: 5,
     }),
     getProductDetails: builder.query({
@@ -41,11 +51,11 @@ export const productsApiSlice = apiSlice.injectEndpoints({
     }),
     createProduct: builder.mutation({
       query: (data) => ({
-        url:PRODUCTS_URL,
-        method: 'POST',
+        url: PRODUCTS_URL,
+        method: "POST",
         body: data,
       }),
-      invalidatesTags: ['Product'],
+      invalidatesTags: ["Product"],
     }),
   }),
 });
