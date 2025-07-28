@@ -1,5 +1,7 @@
 import React from "react";
-import { Button, Form } from "react-bootstrap";
+import { Box, IconButton, TextField } from "@mui/material";
+import RemoveIcon from "@mui/icons-material/Remove";
+import AddIcon from "@mui/icons-material/Add";
 
 const QuantitySelector = ({ qty, setQty, stock }) => {
   const handleChange = (e) => {
@@ -23,36 +25,51 @@ const QuantitySelector = ({ qty, setQty, stock }) => {
   };
 
   return (
-    <div className="d-flex align-items-center">
-      <Button
-        variant="outline-secondary"
-        size="sm"
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <IconButton
+        size="small"
         onClick={() => setQty(qty > 1 ? qty - 1 : 1)}
         disabled={qty <= 1}
+        sx={{ 
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1
+        }}
       >
-        -
-      </Button>
+        <RemoveIcon fontSize="small" />
+      </IconButton>
 
-      <Form.Control
+      <TextField
         type="number"
         value={qty}
         onChange={handleChange}
         onBlur={handleBlur}
-        className="mx-2 text-center"
-        style={{ width: "60px" }}
-        inputMode="numeric"
-        pattern="[0-9]*"
+        inputProps={{ 
+          min: 1, 
+          max: stock,
+          style: { textAlign: 'center' }
+        }}
+        sx={{ 
+          width: "80px",
+          '& .MuiOutlinedInput-root': {
+            borderRadius: 1
+          }
+        }}
       />
 
-      <Button
-        variant="outline-secondary"
-        size="sm"
+      <IconButton
+        size="small"
         onClick={() => setQty(qty < stock ? qty + 1 : qty)}
         disabled={qty >= stock}
+        sx={{ 
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1
+        }}
       >
-        +
-      </Button>
-    </div>
+        <AddIcon fontSize="small" />
+      </IconButton>
+    </Box>
   );
 };
 
