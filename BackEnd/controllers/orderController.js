@@ -181,6 +181,12 @@ export const createOrder = async ({
     }
 
     await client.query(
+      `UPDATE "BOIPOTRO"."user_coupons" SET used_count = used_count + 1
+       WHERE user_id = $1 AND coupon_id = $2`,
+      [user_id, coupon_id]
+    );
+
+    await client.query(
       `DELETE FROM "BOIPOTRO"."picked_items" WHERE user_id = $1`,
       [user_id]
     );
