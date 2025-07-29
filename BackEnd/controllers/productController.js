@@ -52,6 +52,8 @@ const getProducts = asyncHandler(async (req, res) => {
         b.id,
         b.title,
         b.price,
+        b.stock,
+        b.discount,
         COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
         COUNT(r.id) AS review_count,
         bp.photo_url AS image,
@@ -642,7 +644,11 @@ const createProduct = asyncHandler(async (req, res) => {
       discount,
       isbn,
       publication_date,
-      publisher_id,
+      publisher_name,
+      image_url,
+      authors = [],
+      categories = [],  
+      
     } = req.body;
 
     // Validate publisher exists
@@ -671,6 +677,7 @@ const createProduct = asyncHandler(async (req, res) => {
         isbn,
         publication_date,
         publisher_id,
+      
       ]
     );
 
