@@ -20,10 +20,13 @@ const AssignCouponScreen = () => {
   const [coupons, setCoupons] = useState([]);
   const [selectedCoupon, setSelectedCoupon] = useState("");
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectedLevel, setSelectedLevel] = useState("");
+  const [userLevels, setUserLevels] = useState([]);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedCouponDetails, setSelectedCouponDetails] = useState(null);
+  const [assignmentMode, setAssignmentMode] = useState("individual"); // "individual" or "level"
   const [newCoupon, setNewCoupon] = useState({
     code: "",
     description: "",
@@ -40,14 +43,16 @@ const AssignCouponScreen = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, couponsRes] = await Promise.all([
+        const [usersRes, couponsRes, levelsRes] = await Promise.all([
           axios.get("/api/users", { withCredentials: true }),
           axios.get("/api/admin/coupons", { withCredentials: true }),
+          axios.get("/api/admin/users/levels", { withCredentials: true }),
         ]);
         setUsers(usersRes.data || []);
         setCoupons(
           Array.isArray(couponsRes.data.coupons) ? couponsRes.data.coupons : []
         );
+        setUserLevels(levelsRes.data || []);
       } catch (err) {
         setError(err.message);
         toast.error("Error loading data");
@@ -88,6 +93,22 @@ const AssignCouponScreen = () => {
     }
   };
 
+  const handleAssignByLevel = async () => {
+    try {
+      await axios.post(
+        "/api/admin/coupons/assign-by-level",
+        {
+          coupon_id: selectedCoupon,
+          level_id: selectedLevel,
+        },
+        { withCredentials: true }
+      );
+      toast.success("Coupon assigned successfully to all users in this level!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Error assigning coupon by level");
+    }
+  };
+
   const handleDeleteCoupon = async (id) => {
     if (window.confirm("Are you sure you want to delete this coupon?")) {
       try {
@@ -108,11 +129,11 @@ const AssignCouponScreen = () => {
     setShowDetails(true);
   };
 
-  const levels = Array.from(new Set(users.map((u) => u.level).filter(Boolean)));
+  const levels = Array.from(new Set(users.map((u) => u.level_name).filter(Boolean)));
   const filteredUsers =
     levelFilter === "all"
       ? users
-      : users.filter((u) => u.level === levelFilter);
+      : users.filter((u) => u.level_name === levelFilter);
 
   return (
     <Container className="py-4">
@@ -353,84 +374,155 @@ const AssignCouponScreen = () => {
             </Form.Select>
           </Form.Group>
 
-          <Form.Group className="mb-3" controlId="levelFilter">
-            <Form.Label>Filter Users by Level</Form.Label>
-            <Form.Select
-              value={levelFilter}
-              onChange={(e) => setLevelFilter(e.target.value)}
-              className="mb-3"
-            >
-              <option value="all">All Levels</option>
-              {levels.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </Form.Select>
+          {/* Assignment Mode Toggle */}
+          <Form.Group className="mb-3">
+            <Form.Label>Assignment Mode</Form.Label>
+            <div className="d-flex gap-3">
+              <Form.Check
+                type="radio"
+                id="individual-mode"
+                name="assignmentMode"
+                label="Individual Users"
+                checked={assignmentMode === "individual"}
+                onChange={() => setAssignmentMode("individual")}
+              />
+              <Form.Check
+                type="radio"
+                id="level-mode"
+                name="assignmentMode"
+                label="By User Level"
+                checked={assignmentMode === "level"}
+                onChange={() => setAssignmentMode("level")}
+              />
+            </div>
           </Form.Group>
 
-          <Form.Check
-            type="checkbox"
-            label="Select All Users"
-            checked={
-              filteredUsers.length > 0 &&
-              filteredUsers.every((u) => selectedUsers.includes(u.id))
-            }
-            onChange={(e) => {
-              if (e.target.checked) {
-                setSelectedUsers([
-                  ...new Set([
-                    ...selectedUsers,
-                    ...filteredUsers.map((u) => u.id),
-                  ]),
-                ]);
-              } else {
-                setSelectedUsers(
-                  selectedUsers.filter(
-                    (id) => !filteredUsers.map((u) => u.id).includes(id)
-                  )
-                );
-              }
-            }}
-            className="mb-3"
-          />
+          {assignmentMode === "individual" ? (
+            <>
+              <Form.Group className="mb-3" controlId="levelFilter">
+                <Form.Label>Filter Users by Level</Form.Label>
+                <Form.Select
+                  value={levelFilter}
+                  onChange={(e) => setLevelFilter(e.target.value)}
+                  className="mb-3"
+                >
+                  <option value="all">All Levels</option>
+                  {levels.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
 
-          <ListGroup className="mb-3">
-            {filteredUsers.map((u) => (
-              <ListGroup.Item key={u.id} className="d-flex align-items-center">
-                <Form.Check
-                  type="checkbox"
-                  className="me-3"
-                  checked={selectedUsers.includes(u.id)}
-                  onChange={(e) => {
-                    if (e.target.checked)
-                      setSelectedUsers([...selectedUsers, u.id]);
-                    else
-                      setSelectedUsers(
-                        selectedUsers.filter((id) => id !== u.id)
-                      );
-                  }}
-                />
-                <div>
-                  <strong>{u.name}</strong>
-                  <div className="text-muted">
-                    <Badge bg="info" className="me-2">
-                      Level: {u.level}
-                    </Badge>
-                   
-                  </div>
-                </div>
-              </ListGroup.Item>
-            ))}
-          </ListGroup>
+              <Form.Check
+                type="checkbox"
+                label="Select All Users"
+                checked={
+                  filteredUsers.length > 0 &&
+                  filteredUsers.every((u) => selectedUsers.includes(u.id))
+                }
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedUsers([
+                      ...new Set([
+                        ...selectedUsers,
+                        ...filteredUsers.map((u) => u.id),
+                      ]),
+                    ]);
+                  } else {
+                    setSelectedUsers(
+                      selectedUsers.filter(
+                        (id) => !filteredUsers.map((u) => u.id).includes(id)
+                      )
+                    );
+                  }
+                }}
+                className="mb-3"
+              />
 
-          <Button
-            variant="primary"
-            onClick={handleAssign}
-            disabled={!selectedCoupon || selectedUsers.length === 0}
-          >
-            Assign Coupon to Selected Users
-          </Button>
+              <ListGroup className="mb-3">
+                {filteredUsers.map((u) => (
+                  <ListGroup.Item key={u.id} className="d-flex align-items-center">
+                    <Form.Check
+                      type="checkbox"
+                      className="me-3"
+                      checked={selectedUsers.includes(u.id)}
+                      onChange={(e) => {
+                        if (e.target.checked)
+                          setSelectedUsers([...selectedUsers, u.id]);
+                        else
+                          setSelectedUsers(
+                            selectedUsers.filter((id) => id !== u.id)
+                          );
+                      }}
+                    />
+                    <div>
+                      <strong>{u.name}</strong>
+                      <div className="text-muted">
+                        <Badge bg="info" className="me-2">
+                          Level: {u.level_name || "No Level"}
+                        </Badge>
+                        <Badge bg="secondary" className="me-2">
+                          Orders: {u.order_count || 0}
+                        </Badge>
+                      </div>
+                    </div>
+                  </ListGroup.Item>
+                ))}
+              </ListGroup>
+
+              <Button
+                variant="primary"
+                onClick={handleAssign}
+                disabled={!selectedCoupon || selectedUsers.length === 0}
+              >
+                Assign Coupon to Selected Users
+              </Button>
+            </>
+          ) : (
+            <>
+              <Form.Group className="mb-3">
+                <Form.Label>Select User Level</Form.Label>
+                <Form.Select
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                  className="mb-3"
+                >
+                  <option value="">Select Level</option>
+                  {userLevels.map((level) => (
+                    <option key={level.level_id} value={level.level_id}>
+                      {level.level_name} ({level.min_orders}-{level.max_orders || '∞'} orders)
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+
+              {selectedLevel && (
+                <Alert variant="info" className="mb-3">
+                  <strong>Level Details:</strong>
+                  {(() => {
+                    const level = userLevels.find(l => l.level_id == selectedLevel);
+                    return level ? (
+                      <div>
+                        <div>Level: {level.level_name}</div>
+                        <div>Order Range: {level.min_orders} - {level.max_orders || '∞'} orders</div>
+                        <div>Users in this level: {users.filter(u => u.level_id == selectedLevel).length}</div>
+                      </div>
+                    ) : null;
+                  })()}
+                </Alert>
+              )}
+
+              <Button
+                variant="primary"
+                onClick={handleAssignByLevel}
+                disabled={!selectedCoupon || !selectedLevel}
+              >
+                Assign Coupon to All Users in Selected Level
+              </Button>
+            </>
+          )}
         </Card.Body>
       </Card>
 

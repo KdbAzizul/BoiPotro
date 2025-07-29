@@ -47,6 +47,13 @@ FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE CASCADE,
 FOREIGN KEY (child_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
+CREATE TABLE user_levels (
+    level_id SERIAL PRIMARY KEY,
+    level_name TEXT NOT NULL,
+    min_orders INT NOT NULL,
+    max_orders INT -- NULL means no upper limit
+);
+
 CREATE TABLE book_categories (
 book_id INT,
 category_id INT,
@@ -54,6 +61,8 @@ PRIMARY KEY (book_id, category_id),
 FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
+
+
 
 CREATE TABLE users (
     ID          SERIAL PRIMARY KEY,
@@ -65,6 +74,8 @@ CREATE TABLE users (
     DOB         VARCHAR(20),
     IMAGE       VARCHAR(1000) DEFAULT '/images/no-profile-picture.jpg',
     isAdmin     BOOLEAN DEFAULT FALSE
+    order_count INT DEFAULT 0,
+   level_id INT REFERENCES user_levels(level_id)
 );
 
 CREATE TABLE coupons (
@@ -174,6 +185,17 @@ CREATE TABLE payment_logs (
                         
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+
+
+INSERT INTO "BOIPOTRO"."user_levels" (level_name, min_orders, max_orders) VALUES
+('Newbie',        0,   2),
+('Reader',        3,   6),
+('Bookworm',     7,  10),
+('Bibliophile',  11,  15),
+('Collector',    16,  20),
+('Elite Reader',21, 30),
+('Legend',      31, NULL);
 
 
 INSERT INTO users (ID, NAME, PASSWORD, ADDRESS, EMAIL, DOB, PHONE, isAdmin)

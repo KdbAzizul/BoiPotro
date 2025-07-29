@@ -121,6 +121,86 @@ export const getMyCoupons = asyncHandler(async (req, res) => {
     }
   });
 
+// @desc    Assign coupon to users by level
+// @route   POST /api/coupons/assign-by-level
+// @access  Private/Admin
+export const assignCouponByLevel = asyncHandler(async (req, res) => {
+  const { coupon_id, level_id } = req.body;
+  
+  if (!coupon_id || !level_id) {
+    return res.status(400).json({ 
+      error: "Coupon ID and level ID are required" 
+    });
+  }
+
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+
+    // Verify coupon exists and is valid
+    const couponCheck = await client.query(
+      `SELECT id, valid_until FROM "BOIPOTRO"."coupons" WHERE id = $1`,
+      [coupon_id]
+    );
+
+    if (couponCheck.rows.length === 0) {
+      throw new Error('Coupon not found');
+    }
+
+    if (new Date(couponCheck.rows[0].valid_until) < new Date()) {
+      throw new Error('Cannot assign expired coupon');
+    }
+
+    // Verify level exists
+    const levelCheck = await client.query(
+      `SELECT level_id, level_name FROM "BOIPOTRO"."user_levels" WHERE level_id = $1`,
+      [level_id]
+    );
+
+    if (levelCheck.rows.length === 0) {
+      throw new Error('User level not found');
+    }
+
+    // Get all users with this level
+    const usersResult = await client.query(
+      `SELECT id FROM "BOIPOTRO"."users" WHERE level_id = $1`,
+      [level_id]
+    );
+
+    if (usersResult.rows.length === 0) {
+      throw new Error('No users found with this level');
+    }
+
+    const userIds = usersResult.rows.map(user => user.id);
+
+    // Insert assignments in bulk
+    await client.query(
+      `INSERT INTO "BOIPOTRO"."user_coupons" (user_id, coupon_id, used_count)
+       SELECT u.id, $1, 0
+       FROM unnest($2::integer[]) AS u(id)
+       ON CONFLICT (user_id, coupon_id) DO NOTHING`,
+      [coupon_id, userIds]
+    );
+
+    await client.query('COMMIT');
+    res.json({ 
+      message: `Coupon assigned successfully to ${usersResult.rows.length} users with level: ${levelCheck.rows[0].level_name}`,
+      assigned_count: usersResult.rows.length,
+      level_name: levelCheck.rows[0].level_name
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error assigning coupon by level:', error);
+    res.status(400).json({
+      message: error.message || 'Failed to assign coupon by level',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  } finally {
+    client.release();
+  }
+});
+
 // Create a new coupon
 // @desc    Create a new coupon
 // @route   POST /api/coupons

@@ -169,9 +169,11 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const getUsers = asyncHandler(async (req, res) => {
   const result = await pool.query(
-    `SELECT id, name, email,level, isadmin AS "isAdmin"
-     FROM "BOIPOTRO"."users"
-     ORDER BY id`
+    `SELECT u.id, u.name, u.email, u.order_count, u.isadmin AS "isAdmin",
+            ul.level_name, ul.level_id
+     FROM "BOIPOTRO"."users" u
+     LEFT JOIN "BOIPOTRO"."user_levels" ul ON u.level_id = ul.level_id
+     ORDER BY u.id`
   );
   res.json(result.rows);
 });
@@ -240,6 +242,18 @@ const updateUser = asyncHandler(async (req, res) => {
   res.json(updateResult.rows[0]);
 });
 
+// @desc    Get all user levels
+// @route   GET /api/users/levels
+// @access  Private/Admin
+const getUserLevels = asyncHandler(async (req, res) => {
+  const result = await pool.query(
+    `SELECT level_id, level_name, min_orders, max_orders
+     FROM "BOIPOTRO"."user_levels"
+     ORDER BY min_orders`
+  );
+  res.json(result.rows);
+});
+
 export{
     authUser,
     registerUser,
@@ -249,5 +263,6 @@ export{
     getUsers,
     deleteUser,
     getUserByID,
-    updateUser
+    updateUser,
+    getUserLevels
 }
