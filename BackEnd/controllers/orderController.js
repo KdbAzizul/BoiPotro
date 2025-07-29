@@ -10,91 +10,106 @@ import { calculateCartPrices } from "../utils/calculateCartPrices.js";
 // @access     private
 const validateCoupon = asyncHandler(async (req, res) => {
   const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ valid: false, error: "Coupon code is required" });
+  }
+  
   const user_id = req.user.id;
+  const client = await pool.connect();
 
-  const result = await pool.query(
-    `SELECT c.id as cart_id, c.quantity, b.id as book_id, b.title, b.price, b.discount
-     FROM "BOIPOTRO"."picked_items" c
-     JOIN "BOIPOTRO"."books" b ON c.book_id = b.id
-     WHERE c.user_id = $1`,
-    [user_id]
-  );
+  try {
+    await client.query('BEGIN');
 
-  const cartItems = result.rows;
+    // Get cart items
+    const result = await client.query(
+      `SELECT c.id as cart_id, c.quantity, b.id as book_id, b.title, b.price, b.discount
+       FROM "BOIPOTRO"."picked_items" c
+       JOIN "BOIPOTRO"."books" b ON c.book_id = b.id
+       WHERE c.user_id = $1`,
+      [user_id]
+    );
 
-  const { totalPrice } = calculateCartPrices(cartItems);
-  const now = new Date();
+    const cartItems = result.rows;
+    if (cartItems.length === 0) {
+      throw new Error("Cart is empty");
+    }
 
-  const couponRes = await pool.query(
-    `SELECT * FROM "BOIPOTRO"."coupons" WHERE code = $1`,
-    [code]
-  );
+    // Calculate total price
+    const { totalPrice } = calculateCartPrices(cartItems);
+    const now = new Date();
 
-  if (couponRes.rowCount === 0) {
-    return res.json({ valid: false, error: "Coupon not found" });
-  }
+    // Get coupon details
+    const couponRes = await client.query(
+      `SELECT * FROM "BOIPOTRO"."coupons" WHERE code = $1`,
+      [code]
+    );
 
-  const coupon = couponRes.rows[0];
+    if (couponRes.rowCount === 0) {
+      throw new Error("Coupon not found");
+    }
 
-  const cartTotal = parseFloat(totalPrice);
-  const minOrderAmount = parseFloat(coupon.min_order_amount) || 0;
+    const coupon = couponRes.rows[0];
 
-  // Validate date
-  if (now < new Date(coupon.valid_from) || now > new Date(coupon.valid_until)) {
-    return res.json({ valid: false, error: "Coupon expired" });
-  }
+    const cartTotal = parseFloat(totalPrice);
+    const minOrderAmount = parseFloat(coupon.min_order_amount) || 0;
 
-  // Validate minimum order amount
-  if (minOrderAmount > 0 && cartTotal < minOrderAmount) {
-    return res.json({
-      valid: false,
-      error: `Minimum order amount is $${minOrderAmount}`,
-    });
-  }
+    // Validate date
+    if (now < new Date(coupon.valid_from) || now > new Date(coupon.valid_until)) {
+      throw new Error("Coupon expired");
+    }
 
-  if (user_id) {
-    // 🔎 Check if this user has been offered this coupon at all
-    const usageRes = await pool.query(
+    // Validate minimum order amount
+    if (minOrderAmount > 0 && cartTotal < minOrderAmount) {
+      throw new Error(`Minimum order amount is $${minOrderAmount}`);
+    }
+
+    // Check coupon eligibility and usage
+    const usageRes = await client.query(
       `SELECT used_count FROM "BOIPOTRO"."user_coupons"
-     WHERE user_id = $1 AND coupon_id = $2`,
+       WHERE user_id = $1 AND coupon_id = $2`,
       [user_id, coupon.id]
     );
 
     if (usageRes.rowCount === 0) {
-      return res.json({
-        valid: false,
-        error: "You are not eligible to use this coupon",
-      });
+      throw new Error("You are not eligible to use this coupon");
     }
 
-    //check usage limit
+    // Check usage limit
     const used = usageRes.rows[0].used_count || 0;
     if (coupon.usage_limit && used >= coupon.usage_limit) {
-      return res.json({
-        valid: false,
-        error: "Coupon usage limit reached",
-      });
+      throw new Error("Coupon usage limit reached");
     }
+
+    await client.query('COMMIT');
+
+    const percent = parseFloat(coupon.percentage_discount) || 0;
+    const fixed = parseFloat(coupon.amount_discount) || 0;
+    const max = parseFloat(coupon.maximum_discount) || Infinity;
+
+    const percentAmount = (cartTotal * percent) / 100;
+    const totalDiscount = Math.min(percentAmount + fixed, max);
+    const newTotal = cartTotal - totalDiscount;
+
+    res.json({
+      valid: true,
+      discount: {
+        percentage: percent,
+        fixed,
+        maximum_discount: max,
+        final_discount_amount: totalDiscount,
+      },
+      new_total: newTotal,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(400).json({
+      valid: false,
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  } finally {
+    client.release();
   }
-
-  const percent = parseFloat(coupon.percentage_discount) || 0;
-  const fixed = parseFloat(coupon.amount_discount) || 0;
-  const max = parseFloat(coupon.maximum_discount) || Infinity;
-
-  const percentAmount = (cartTotal * percent) / 100;
-  const totalDiscount = Math.min(percentAmount + fixed, max);
-  const newTotal = cartTotal - totalDiscount;
-
-  res.json({
-    valid: true,
-    discount: {
-      percentage: percent,
-      fixed,
-      maximum_discount: max,
-      final_discount_amount: totalDiscount,
-    },
-    new_total: newTotal,
-  });
 });
 
 
@@ -329,26 +344,57 @@ export const createOrder = async ({
 // @access     private
 const getMyOrders = asyncHandler(async (req, res) => {
   const user_id = req.user.id;
-
   const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN');
+
+    // First verify the user exists
+    const userCheck = await client.query(
+      `SELECT id FROM "BOIPOTRO"."users" WHERE id = $1`,
+      [user_id]
+    );
+
+    if (userCheck.rowCount === 0) {
+      throw new Error("User not found");
+    }
+
     const ordersRes = await client.query(
       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-              c.state_id, c.created_at, c.payment_method AS payment_method, cp.code AS coupon_code,
+              c.state_id, c.created_at, c.payment_method AS payment_method, 
+              c.is_paid, cp.code AS coupon_code,
               cs.name AS state_name
        FROM "BOIPOTRO"."cart" c
-      
        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
-       LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id=cs.id
+       LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
        WHERE c.user_id = $1
        ORDER BY c.created_at DESC`,
       [user_id]
     );
 
-    res.status(200).json(ordersRes.rows);
-  } catch (err) {
-    console.error("Failed to fetch user's orders:", err);
-    res.status(500).json({ error: "Could not fetch orders" });
+    // Enrich with order items if needed
+    const enrichedOrders = await Promise.all(
+      ordersRes.rows.map(async (order) => {
+        const itemsRes = await client.query(
+          `SELECT ci.book_id, b.title, ci.quantity, b.price
+           FROM "BOIPOTRO"."cartitems" ci
+           JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
+           WHERE ci.cart_id = $1`,
+          [order.cart_id]
+        );
+        return { ...order, items: itemsRes.rows };
+      })
+    );
+
+    await client.query('COMMIT');
+    res.status(200).json(enrichedOrders);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Failed to fetch user's orders:", error);
+    res.status(error.message === 'User not found' ? 404 : 500).json({ 
+      error: error.message || "Could not fetch orders",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   } finally {
     client.release();
   }
@@ -360,47 +406,44 @@ const getMyOrders = asyncHandler(async (req, res) => {
 
 const getOrderById = asyncHandler(async (req, res) => {
   const orderId = req.params.id;
+  if (!orderId) {
+    return res.status(400).json({ error: "Order ID is required" });
+  }
+
   const user_id = req.user.id;
   const isAdmin = req.user.isadmin;
-
   const client = await pool.connect();
+
   try {
-    let cartRes;
-    if (isAdmin) {
-      cartRes = await client.query(
-        `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-                c.state_id, c.created_at, c.payment_method, cp.code AS coupon_code,
-                u.name AS user_name, u.email AS user_email,cs.name AS state_name
-         FROM "BOIPOTRO"."cart" c
-         JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-         
-         LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
-         LEFT JOIN "BOIPOTRO"."cart_states" cs on cs.id=c.state_id
-         WHERE c.id = $1`,
-        [orderId]
-      );
-    } else {
-      cartRes = await client.query(
-        `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
-                c.state_id, c.created_at, c.payment_method, cp.code AS coupon_code,
-                u.name AS user_name, u.email AS user_email,cs.name AS state_name
-         FROM "BOIPOTRO"."cart" c
-         JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-       
-         LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
-         LEFT JOIN "BOIPOTRO"."cart_states" cs on cs.id=c.state_id
-         WHERE c.id = $1 AND c.user_id = $2`,
-        [orderId, user_id]
-      );
-    }
+    await client.query('BEGIN');
+
+    // Prepare the base query
+    const baseQuery = `
+      SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address, 
+             c.state_id, c.created_at, c.payment_method, cp.code AS coupon_code,
+             u.name AS user_name, u.email AS user_email, cs.name AS state_name,
+             c.is_paid, c.tran_id
+      FROM "BOIPOTRO"."cart" c
+      JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
+      LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
+      LEFT JOIN "BOIPOTRO"."cart_states" cs ON cs.id = c.state_id`;
+
+    // Execute appropriate query based on user role
+    const cartRes = await client.query(
+      isAdmin
+        ? `${baseQuery} WHERE c.id = $1`
+        : `${baseQuery} WHERE c.id = $1 AND c.user_id = $2`,
+      isAdmin ? [orderId] : [orderId, user_id]
+    );
 
     if (cartRes.rowCount === 0) {
-      res.status(404);
-      throw new Error("Order not found");
+      throw new Error(isAdmin ? "Order not found" : "Order not found or access denied");
     }
 
+    // Get order items with full details
     const itemsRes = await client.query(
-      `SELECT ci.book_id, b.title, b.price, ci.quantity, bp.photo_url
+      `SELECT ci.book_id, b.title, b.price, ci.quantity, bp.photo_url,
+              b.discount, b.stock
        FROM "BOIPOTRO"."cartitems" ci
        JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
        LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.id
@@ -408,13 +451,28 @@ const getOrderById = asyncHandler(async (req, res) => {
       [orderId]
     );
 
+    // Calculate item totals
+    const items = itemsRes.rows.map(item => ({
+      ...item,
+      total: parseFloat(item.price) * parseInt(item.quantity),
+      final_price: parseFloat(item.price) * (1 - parseFloat(item.discount || 0))
+    }));
+
+    await client.query('COMMIT');
+
     res.status(200).json({
       ...cartRes.rows[0],
-      items: itemsRes.rows,
+      items,
+      total_items: items.reduce((sum, item) => sum + parseInt(item.quantity), 0),
+      items_total: items.reduce((sum, item) => sum + item.total, 0)
     });
-  } catch (err) {
-    console.error("Failed to fetch order:", err);
-    res.status(500).json({ error: "Could not fetch order details" });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Failed to fetch order:", error);
+    res.status(error.message.includes("not found") ? 404 : 500).json({
+      error: error.message || "Could not fetch order details",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   } finally {
     client.release();
   }
@@ -572,71 +630,135 @@ const cancelOrder = asyncHandler(async (req, res) => {
 // @desc       Update order state
 // @route      PUT /api/orders/:id/state
 // @access     private/Admin
-const updateOrderState = async (req, res) => {
+const updateOrderState = asyncHandler(async (req, res) => {
+  if (!req.user?.isadmin) {
+    return res.status(403).json({ error: "Not authorized as admin" });
+  }
+
   const cartId = req.params.id;
   const { state } = req.body;
 
-  // Check if valid state
-  const stateResult = await pool.query(
-    `SELECT id FROM "BOIPOTRO"."cart_states" WHERE name = $1`,
-    [state]
-  );
-  if (stateResult.rows.length === 0)
-    return res.status(400).json({ error: "Invalid state" });
+  if (!state) {
+    return res.status(400).json({ error: "State is required" });
+  }
 
-  const stateId = stateResult.rows[0].id;
+  const client = await pool.connect();
 
-  // Update cart state
-  await pool.query(`UPDATE "BOIPOTRO"."cart" SET state_id = $1 WHERE id = $2`, [
-    stateId,
-    cartId,
-  ]);
+  try {
+    await client.query('BEGIN');
 
-  res.json({ message: `Cart ${cartId} state updated to ${state}` });
-};
+    // Check if order exists
+    const orderResult = await client.query(
+      `SELECT c.id, c.state_id, cs.name as current_state
+       FROM "BOIPOTRO"."cart" c
+       JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
+       WHERE c.id = $1`,
+      [cartId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      throw new Error("Order not found");
+    }
+
+    // Check if valid state
+    const stateResult = await client.query(
+      `SELECT id FROM "BOIPOTRO"."cart_states" WHERE name = $1`,
+      [state]
+    );
+
+    if (stateResult.rows.length === 0) {
+      throw new Error("Invalid state");
+    }
+
+    const stateId = stateResult.rows[0].id;
+    const currentState = orderResult.rows[0].current_state;
+
+    // Validate state transition
+    if (currentState === 'cancelled' && state !== 'cancelled') {
+      throw new Error("Cannot change state of cancelled order");
+    }
+
+    if (currentState === 'delivered' && state !== 'delivered') {
+      throw new Error("Cannot change state of delivered order");
+    }
+
+    // Update cart state
+    await client.query(
+      `UPDATE "BOIPOTRO"."cart" SET state_id = $1 WHERE id = $2`,
+      [stateId, cartId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ 
+      message: `Order ${cartId} state updated from ${currentState} to ${state}`,
+      orderId: cartId,
+      previousState: currentState,
+      newState: state
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Failed to update order state:", error);
+    res.status(error.message.includes("not found") ? 404 : 400).json({
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  } finally {
+    client.release();
+  }
+});
 
 // @desc       Get all orders (admin only)
 // @route      GET /api/orders
 // @access     private/Admin
 const getOrders = asyncHandler(async (req, res) => {
-  const client = await pool.connect();
+  if (!req.user?.isadmin) {
+    return res.status(403).json({ error: "Not authorized as admin" });
+  }
 
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
+    // Get all orders with user and state info
     const ordersRes = await client.query(
       `SELECT c.id AS cart_id, c.total_price, c.total_item, c.shipping_address,
               c.state_id, c.created_at, u.name AS user_name, u.email AS user_email,
-              c.payment_method,c.is_paid,cs.name AS state_name, cp.code AS coupon_code
+              c.payment_method, c.is_paid, cs.name AS state_name, cp.code AS coupon_code
        FROM "BOIPOTRO"."cart" c
        JOIN "BOIPOTRO"."users" u ON c.user_id = u.id
-        LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
+       LEFT JOIN "BOIPOTRO"."cart_states" cs ON c.state_id = cs.id
        LEFT JOIN "BOIPOTRO"."coupons" cp ON c.coupon_id = cp.id
        ORDER BY c.created_at DESC`
     );
 
-    const enrichedOrders = [];
+    // Efficiently fetch items for all orders using Promise.all
+    const enrichedOrders = await Promise.all(
+      ordersRes.rows.map(async (order) => {
+        const itemsRes = await client.query(
+          `SELECT ci.book_id, b.title, b.price, ci.quantity, bp.photo_url
+           FROM "BOIPOTRO"."cartitems" ci
+           JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
+           LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.id
+           WHERE ci.cart_id = $1`,
+          [order.cart_id]
+        );
 
-    // Loop over orders and fetch cart items for each
-    for (const order of ordersRes.rows) {
-      const itemsRes = await client.query(
-        `SELECT ci.book_id, b.title, b.price, ci.quantity, bp.photo_url
-         FROM "BOIPOTRO"."cartitems" ci
-         JOIN "BOIPOTRO"."books" b ON ci.book_id = b.id
-         LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.id
-         WHERE ci.cart_id = $1`,
-        [order.cart_id]
-      );
+        return {
+          ...order,
+          items: itemsRes.rows,
+        };
+      })
+    );
 
-      enrichedOrders.push({
-        ...order,
-        items: itemsRes.rows,
-      });
-    }
-
+    await client.query('COMMIT');
     res.status(200).json(enrichedOrders);
-    console.log("fetched all orders");
-  } catch (err) {
-    console.error("Failed to fetch all orders:", err);
-    res.status(500).json({ error: "Could not fetch all orders" });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Failed to fetch all orders:", error);
+    res.status(500).json({ 
+      error: "Could not fetch all orders",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   } finally {
     client.release();
   }

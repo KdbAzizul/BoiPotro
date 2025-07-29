@@ -122,9 +122,30 @@ const PlaceOrderScreen = () => {
           is_paid: false, // Cash on delivery is not paid initially
         }).unwrap();
 
-        await clearCart().unwrap();
-        navigate(`/order/${res.id}`);
-        toast.success("Order placed successfully! Pay on delivery.");
+        if (res.id) {
+          // Add a small delay before clearing the cart
+          setTimeout(async () => {
+            try {
+              await clearCart().unwrap();
+              await refetch(); // Refresh the cart data
+              toast.success("Order placed successfully! Pay on delivery.");
+            } catch (clearError) {
+              console.error('Error clearing cart:', clearError);
+              // Attempt to clear cart one more time after a delay
+              setTimeout(async () => {
+                try {
+                  await clearCart().unwrap();
+                  await refetch(); // Refresh the cart data
+                } catch (retryError) {
+                  console.error('Failed to clear cart on retry:', retryError);
+                }
+              }, 1000);
+            }
+          }, 500);
+
+          // Navigate immediately after order creation
+          navigate(`/order/${res.id}`);
+        }
       } catch (error) {
         toast.error(error?.data?.message || "Order creation failed");
         console.error(error);

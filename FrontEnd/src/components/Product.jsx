@@ -42,10 +42,17 @@ const Product = ({ product }) => {
               </Typography>
               
               <Box sx={{ my: 2 }}>
-                <Rating
-                  value={product.star}
-                  text={`${product.review_count} reviews`}
-                />
+                <Rating value={product.star} text={""} />
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                  sx={{ 
+                    mt: 0.5,
+                    display: 'block'
+                  }}
+                >
+                  {product.review_count} {product.review_count === 1 ? 'review' : 'reviews'}
+                </Typography>
               </Box>
 
               <Typography variant="h5" color="primary" sx={{ fontWeight: 600, mb: 2 }}>

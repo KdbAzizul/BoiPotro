@@ -13,22 +13,22 @@ export const initSSLCOMMERZ = async (req, res) => {
 
   const user_id = req.user.id;
   const tran_id = uuidv4();
-
-  const totalAmount = totalPrice;
+  const client = await pool.connect();
 
   try {
+    await client.query('BEGIN');
+    
     // Save the temporary order in DB
-    await pool.query(
+    await client.query(
       `INSERT INTO "BOIPOTRO"."temp_orders" (
          tran_id, user_id, cart_items, shipping_address,
-         coupon_name, total_price
-       ) VALUES ($1, $2, $3, $4, $5, $6)`,
+         coupon_name, total_price, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
       [
         tran_id,
         user_id,
         JSON.stringify(cartItems),
         shippingAddress,
-
         couponName,
         totalPrice,
       ]
@@ -36,14 +36,13 @@ export const initSSLCOMMERZ = async (req, res) => {
 
     console.log("Expected Tran ID:", tran_id);
     const data = {
-      total_amount: totalAmount,
+      total_amount: totalPrice,
       currency: "BDT",
       tran_id: tran_id,
       success_url: `http://localhost:5000/api/payment/success/${tran_id}`,
       fail_url: `http://localhost:5000/api/payment/fail/${tran_id}`,
       cancel_url: `http://localhost:5000/api/payment/cancel/${tran_id}`,
       ipn_url: `https://boipotro.onrender.com/api/payment/ipn`,
-
       shipping_method: "Courier",
 
       product_name: "BOIPOTRO Order",
@@ -67,22 +66,24 @@ export const initSSLCOMMERZ = async (req, res) => {
       ship_country: shippingAddress.country,
 
       // Optional metadata
-      value_a: user_id?.toString() || "guest",
+      value_a: user_id?.toString() || "guest"
     };
 
     const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
     const apiResponse = await sslcz.init(data);
 
-    //console.log("🔁 SSLCommerz API Response:", apiResponse);
-
     if (apiResponse?.GatewayPageURL) {
+      await client.query('COMMIT');
       res.json(apiResponse);
     } else {
-      res.status(500).json({ message: "Failed to initialize payment gateway" });
+      throw new Error("Failed to initialize payment gateway");
     }
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error("Payment Init Error:", err);
     res.status(500).json({ message: "Payment initialization failed" });
+  } finally {
+    client.release();
   }
 };
 
@@ -286,28 +287,12 @@ export const sslcommerzIPN = async (req, res) => {
 //   }
 // };
 
+// @desc    Handle successful payment and create order
+// @route   GET /api/payment/success/:tran_id
+// @access  Public
 export const paymentSuccess = async (req, res) => {
   const { tran_id } = req.params;
-  //const { val_id } = req.query;
-
-  // console.log("VAL_ID:", val_id); // should not be undefined
-  // if (!val_id) {
-  //   return res.status(400).json({ message: "val_id is missing" });
-  // }
-
-  // const store_id = process.env.SSLC_STORE_ID;
-  // const store_passwd = process.env.SSLC_STORE_PASS;
-
-  // const validatorURL = `https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?val_id=${encodeURIComponent(
-  //   val_id
-  // )}&store_id=${store_id}&store_passwd=${store_passwd}&v=1&format=json`;
-
-  // const sslRes = await axios.get(validatorURL);
-  // const sslData = sslRes.data;
-
-  // console.log("Validated SSL Data:", sslData);
-
-  const card_type =  "SSLCommerz";
+  const card_type = "SSLCommerz";
 
   try {
     const tempRes = await pool.query(
@@ -440,6 +425,9 @@ export const paymentSuccess = async (req, res) => {
 //   res.redirect(`http://localhost:5173/order/${orderId}`);
 // };
 
+// @desc    Handle failed payment
+// @route   GET /api/payment/fail/:tran_id
+// @access  Public
 export const paymentFail = (req, res) => {
   res.redirect(`http://localhost:5173/placeorder`);
 };

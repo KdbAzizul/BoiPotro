@@ -569,43 +569,59 @@ const searchProducts = asyncHandler(async (req, res) => {
 //@route    POST  /api/products/:id/review
 //@access   private
 const createProductReview = asyncHandler(async (req, res) => {
-  const { rating, comment } = req.body;
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    const { rating, comment } = req.body;
 
-  const bookQuery = await pool.query(
-    `SELECT id
-      FROM "BOIPOTRO"."books"
-      WHERE id=$1;`,
-    [req.params.id]
-  );
+    // First check if book exists
+    const bookQuery = await client.query(
+      `SELECT id
+       FROM "BOIPOTRO"."books"
+       WHERE id=$1;`,
+      [req.params.id]
+    );
 
-  const book_id = bookQuery.rows[0].id;
+    if (bookQuery.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: "Book not found" });
+    }
 
-  if (book_id) {
-    const alreadyReviewed = await pool.query(
-      `
-          SELECT user_id
-          FROM "BOIPOTRO"."reviews"
-          WHERE book_id=$1 AND user_id=$2;
-        `,
+    const book_id = bookQuery.rows[0].id;
+
+    // Check if user has already reviewed
+    const alreadyReviewed = await client.query(
+      `SELECT user_id
+       FROM "BOIPOTRO"."reviews"
+       WHERE book_id=$1 AND user_id=$2;`,
       [book_id, req.user.id]
     );
 
     if (alreadyReviewed.rowCount === 1) {
-      return res.status(404).json({ message: "Book Already Reviewed" });
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: "Book Already Reviewed" });
     }
 
-    const reviewRes = await pool.query(
+    // Create the review
+    await client.query(
       `INSERT INTO "BOIPOTRO"."reviews"
-        (user_id,book_id,rating,comment)
-        values
-        ($1,$2,$3,$4)
-        `,
+       (user_id, book_id, rating, comment)
+       VALUES ($1, $2, $3, $4)`,
       [req.user.id, book_id, rating, comment]
     );
 
+    await client.query('COMMIT');
     res.status(201).json({ message: "Review added successfully" });
-  } else {
-    res.status(404).json({ message: "Resource not found" });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in createProductReview:', error);
+    res.status(500).json({ 
+      message: "Failed to create review",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
   }
 });
 
@@ -613,23 +629,12 @@ const createProductReview = asyncHandler(async (req, res) => {
 // @route POST /api/products
 // @access Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
-  const {
-    title,
-    description,
-    price,
-    stock,
-    discount,
-    isbn,
-    publication_date,
-    publisher_id,
-  } = req.body;
-
-  const result = await pool.query(
-    `INSERT INTO "BOIPOTRO"."books"
-     (title, description, price, stock, discount, isbn, publication_date, publisher_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     RETURNING *`,
-    [
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const {
       title,
       description,
       price,
@@ -638,74 +643,187 @@ const createProduct = asyncHandler(async (req, res) => {
       isbn,
       publication_date,
       publisher_id,
-    ]
-  );
+    } = req.body;
 
-  res.status(201).json(result.rows[0]);
+    // Validate publisher exists
+    const publisherExists = await client.query(
+      `SELECT id FROM "BOIPOTRO"."publishers" WHERE id = $1`,
+      [publisher_id]
+    );
+
+    if (publisherExists.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: "Invalid publisher ID" });
+    }
+
+    // Create the book
+    const result = await client.query(
+      `INSERT INTO "BOIPOTRO"."books"
+       (title, description, price, stock, discount, isbn, publication_date, publisher_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [
+        title,
+        description,
+        price,
+        stock,
+        discount,
+        isbn,
+        publication_date,
+        publisher_id,
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in createProduct:', error);
+    res.status(500).json({ 
+      message: "Failed to create product",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
+  }
 });
 
 // @desc update a book info
 // @route PUT /api/products/:id
 // @access Private/Admin
 const updateProduct = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { id } = req.params;
 
-  const book = await pool.query(
-    `SELECT * FROM "BOIPOTRO"."books" WHERE id = $1`,
-    [id]
-  );
-  if (book.rows.length === 0) {
-    return res.status(404).json({ message: "Book not found" });
+    // Check if book exists
+    const book = await client.query(
+      `SELECT * FROM "BOIPOTRO"."books" WHERE id = $1`,
+      [id]
+    );
+    
+    if (book.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: "Book not found" });
+    }
+
+    const {
+      title = book.rows[0].title,
+      description = book.rows[0].description,
+      price = book.rows[0].price,
+      stock = book.rows[0].stock,
+      discount = book.rows[0].discount,
+      isbn = book.rows[0].isbn,
+      publication_date = book.rows[0].publication_date,
+      publisher_id = book.rows[0].publisher_id,
+    } = req.body;
+
+    // Validate publisher if changed
+    if (publisher_id !== book.rows[0].publisher_id) {
+      const publisherExists = await client.query(
+        `SELECT id FROM "BOIPOTRO"."publishers" WHERE id = $1`,
+        [publisher_id]
+      );
+
+      if (publisherExists.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: "Invalid publisher ID" });
+      }
+    }
+
+    // Update the book
+    const updated = await client.query(
+      `UPDATE "BOIPOTRO"."books"
+       SET title=$1, description=$2, price=$3, stock=$4,
+           discount=$5, isbn=$6, publication_date=$7, publisher_id=$8
+       WHERE id=$9 
+       RETURNING *`,
+      [
+        title,
+        description,
+        price,
+        stock,
+        discount,
+        isbn,
+        publication_date,
+        publisher_id,
+        id,
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json(updated.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in updateProduct:', error);
+    res.status(500).json({ 
+      message: "Failed to update product",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
   }
-
-  const {
-    title = book.rows[0].title,
-    description = book.rows[0].description,
-    price = book.rows[0].price,
-    stock = book.rows[0].stock,
-    discount = book.rows[0].discount,
-    isbn = book.rows[0].isbn,
-    publication_date = book.rows[0].publication_date,
-    publisher_id = book.rows[0].publisher_id,
-  } = req.body;
-
-  const updated = await pool.query(
-    `UPDATE "BOIPOTRO"."books"
-     SET title=$1, description=$2, price=$3, stock=$4,
-         discount=$5, isbn=$6, publication_date=$7, publisher_id=$8
-     WHERE id=$9 RETURNING *`,
-    [
-      title,
-      description,
-      price,
-      stock,
-      discount,
-      isbn,
-      publication_date,
-      publisher_id,
-      id,
-    ]
-  );
-
-  res.json(updated.rows[0]);
 });
 
-// @desc update a book info
+// @desc delete a book
 // @route DELETE /api/products/:id
 // @access Private/Admin
 const deleteProduct = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { id } = req.params;
 
-  const check = await pool.query(
-    `SELECT id FROM "BOIPOTRO"."books" WHERE id=$1`,
-    [id]
-  );
-  if (check.rows.length === 0) {
-    return res.status(404).json({ message: "Book not found" });
+    // Check if book exists
+    const check = await client.query(
+      `SELECT id FROM "BOIPOTRO"."books" WHERE id=$1`,
+      [id]
+    );
+    
+    if (check.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: "Book not found" });
+    }
+
+    // Check for related records (optional, depending on your foreign key constraints)
+    const hasOrders = await client.query(
+      `SELECT 1 FROM "BOIPOTRO"."order_items" WHERE book_id=$1 LIMIT 1`,
+      [id]
+    );
+
+    if (hasOrders.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        message: "Cannot delete book with existing orders" 
+      });
+    }
+
+    // Delete related records first (if not using CASCADE)
+    await client.query(`DELETE FROM "BOIPOTRO"."reviews" WHERE book_id = $1`, [id]);
+    await client.query(`DELETE FROM "BOIPOTRO"."book_photos" WHERE book_id = $1`, [id]);
+    await client.query(`DELETE FROM "BOIPOTRO"."bookauthors" WHERE book_id = $1`, [id]);
+    await client.query(`DELETE FROM "BOIPOTRO"."book_categories" WHERE book_id = $1`, [id]);
+    
+    // Finally delete the book
+    await client.query(`DELETE FROM "BOIPOTRO"."books" WHERE id = $1`, [id]);
+
+    await client.query('COMMIT');
+    res.json({ message: "Book deleted successfully" });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in deleteProduct:', error);
+    res.status(500).json({ 
+      message: "Failed to delete product",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
   }
-
-  await pool.query(`DELETE FROM "BOIPOTRO"."books" WHERE id = $1`, [id]);
-  res.json({ message: "Book deleted successfully" });
 });
 
 export {

@@ -4,9 +4,9 @@ import { useSelector } from "react-redux";
 import { useGetMyOrdersQuery } from "../slices/ordersApiSlice";
 import Loader from "../components/Loader";
 import Message from "../components/Message";
-import { useState, useMemo } from "react";
-import { useEffect} from "react";
+import { useState, useMemo, useEffect } from "react";
 import axios from "axios";
+import { BASE_URL } from '../constants';
 
 const ProfileScreen = () => {
   const navigate = useNavigate();
@@ -27,11 +27,64 @@ const ProfileScreen = () => {
   }, [orders, statusFilter]);
 
   const [coupons, setCoupons] = useState([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(true);
+  const [errorCoupons, setErrorCoupons] = useState(null);
 
   useEffect(() => {
-    axios.get("/api/users/coupons", { withCredentials: true })
-      .then(res => setCoupons(res.data));
-  }, []);
+    const fetchCoupons = async () => {
+      setLoadingCoupons(true);
+      try {
+        const config = {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        };
+
+        const { data } = await axios.get(
+          `${BASE_URL}/api/users/coupons`,
+          config
+        );
+
+        console.log('Coupons response:', data); // Debug log
+        console.log('Is Array?', Array.isArray(data)); // Check if it's an array
+        console.log('Response type:', typeof data); // Check data type
+        
+        // Handle different response structures
+        let couponsArray = [];
+        if (Array.isArray(data)) {
+          couponsArray = data;
+        } else if (data && typeof data === 'object') {
+          // If data is an object, it might be wrapped in a property
+          // Try to find an array in the response
+          const possibleArrays = Object.values(data).find(val => Array.isArray(val));
+          couponsArray = possibleArrays || [];
+        }
+        
+        console.log('Processed coupons:', couponsArray); // Log processed data
+        setCoupons(couponsArray);
+        setErrorCoupons(null);
+      } catch (error) {
+        console.error('Error fetching coupons:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        });
+        setErrorCoupons(
+          error.response?.data?.message || 
+          error.message || 
+          'Error fetching coupons'
+        );
+        setCoupons([]);
+      } finally {
+        setLoadingCoupons(false);
+      }
+    };
+
+    if (userInfo) {
+      fetchCoupons();
+    }
+  }, [userInfo]);
 
   const updateHandler = () => {
     navigate("/profile/edit");
@@ -76,7 +129,11 @@ const ProfileScreen = () => {
 
       <Col md={12} className="mt-4">
         <h3>My Coupons</h3>
-        {coupons.length === 0 ? (
+        {loadingCoupons ? (
+          <Loader />
+        ) : errorCoupons ? (
+          <Message variant="danger">{errorCoupons}</Message>
+        ) : coupons.length === 0 ? (
           <Message>No coupons found</Message>
         ) : (
           <ListGroup>
