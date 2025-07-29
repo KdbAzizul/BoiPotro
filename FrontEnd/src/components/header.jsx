@@ -279,6 +279,16 @@ const Header = () => {
                           </ListItemIcon>
                           <ListItemText primary="Authors" />
                         </MenuItem>
+                        <MenuItem
+                          component={Link}
+                          to="/admin/publishers"
+                          onClick={handleAdminMenuClose}
+                        >
+                          <ListItemIcon>
+                            <LocalOffer fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary="Publishers" />
+                        </MenuItem>
                       </Menu>
                     </>
                   )}

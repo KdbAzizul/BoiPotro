@@ -145,7 +145,7 @@ const getAuthors = asyncHandler(async (req, res) => {
 const getPublishers = asyncHandler(async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name FROM "BOIPOTRO"."publishers" ORDER BY name'
+      'SELECT id, name, address, website, contact_email FROM "BOIPOTRO"."publishers" ORDER BY name'
     );
     res.json(result.rows);
   } catch (error) {

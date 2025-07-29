@@ -16,6 +16,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import publisherRoutes from './routes/publisherRoutes.js';
 
 const port=process.env.PORT || 5000;
 import pool from './db.js';
@@ -45,6 +46,7 @@ app.use('/api/cart',cartRoutes);
 app.use('/api/orders',orderRoutes);
 app.use('/api/payment',paymentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/publishers', publisherRoutes);
 
 // Debug route to test API
 app.get('/api/test', (req, res) => {

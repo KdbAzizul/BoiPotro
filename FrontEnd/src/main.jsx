@@ -31,6 +31,9 @@ import AssignCouponScreen from "./screens/admin/AssignCouponScreen.jsx";
 import AdminAuthorList from "./screens/author/AdminAuthorList.jsx";
 import AuthorForm from "./screens/author/AuthorForm.jsx";
 import AuthorDetailScreen from "./screens/author/AuthorDetailScreen.jsx";
+import PublisherListScreen from "./screens/admin/PublisherListScreen.jsx";
+import PublisherForm from "./screens/admin/PublisherForm.jsx";
+import PublisherDetailScreen from "./screens/admin/PublisherDetailScreen.jsx";
 
 
 const router = createBrowserRouter(
@@ -65,6 +68,10 @@ const router = createBrowserRouter(
         <Route path="/admin/authors/:id" element={<AuthorDetailScreen />} />
         <Route path="/admin/authors/edit/:id" element={<AuthorForm isEdit={true} />} />
         
+        <Route path="/admin/publishers" element={<PublisherListScreen />} />
+        <Route path="/admin/publishers/create" element={<PublisherForm />} />
+        <Route path="/admin/publishers/:id" element={<PublisherDetailScreen />} />
+        <Route path="/admin/publishers/edit/:id" element={<PublisherForm isEdit={true} />} />
 
 
         <Route path="/admin/product/create" element={<ProductForm />} />
