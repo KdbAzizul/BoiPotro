@@ -16,6 +16,7 @@ import {
   Badge,
   InputGroup,
 } from "react-bootstrap";
+import { FaPlus, FaTimes } from "react-icons/fa";
 
 const ProductForm = ({ isEdit = false }) => {
   const { id } = useParams();
@@ -28,6 +29,7 @@ const ProductForm = ({ isEdit = false }) => {
   const [createBook] = useCreateProductMutation();
   const [updateBook] = useUpdateProductMutation();
 
+  // State for form data
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -42,14 +44,53 @@ const ProductForm = ({ isEdit = false }) => {
     categories: [],
   });
 
-  const [authorInput, setAuthorInput] = useState("");
-  const [categoryInput, setCategoryInput] = useState("");
+  // State for dropdown options
+  const [authors, setAuthors] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [publishers, setPublishers] = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // State for selected values
+  const [selectedAuthor, setSelectedAuthor] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedPublisher, setSelectedPublisher] = useState("");
+
+  // Fetch dropdown options
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        setLoadingOptions(true);
+        const [authorsRes, categoriesRes, publishersRes] = await Promise.all([
+          fetch('/api/products/authors'),
+          fetch('/api/products/categories'),
+          fetch('/api/products/publishers')
+        ]);
+
+        const authorsData = await authorsRes.json();
+        const categoriesData = await categoriesRes.json();
+        const publishersData = await publishersRes.json();
+
+        setAuthors(authorsData);
+        setCategories(categoriesData);
+        setPublishers(publishersData);
+      } catch (error) {
+        console.error('Error fetching options:', error);
+        toast.error('Failed to load form options');
+      } finally {
+        setLoadingOptions(false);
+      }
+    };
+
+    fetchOptions();
+  }, []);
 
   useEffect(() => {
     if (isEdit && existingBook) {
       setFormData({
         ...existingBook,
         publication_date: existingBook.publication_date?.split("T")[0],
+        Image: existingBook.image || "", // Map image to Image
+        publisher_id: existingBook.publisher_id || "", // Use publisher_id from backend
         authors: existingBook.authors || [],
         categories: existingBook.categories || [],
       });
@@ -61,21 +102,37 @@ const ProductForm = ({ isEdit = false }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleAddTag = (type) => {
-    const input = type === "authors" ? authorInput : categoryInput;
-    if (input.trim()) {
+  const handleAddAuthor = () => {
+    if (selectedAuthor && !formData.authors.includes(selectedAuthor)) {
       setFormData((prev) => ({
         ...prev,
-        [type]: [...prev[type], input.trim()],
+        authors: [...prev.authors, selectedAuthor],
       }));
-      type === "authors" ? setAuthorInput("") : setCategoryInput("");
+      setSelectedAuthor("");
     }
   };
 
-  const handleRemoveTag = (type, index) => {
+  const handleAddCategory = () => {
+    if (selectedCategory && !formData.categories.includes(selectedCategory)) {
+      setFormData((prev) => ({
+        ...prev,
+        categories: [...prev.categories, selectedCategory],
+      }));
+      setSelectedCategory("");
+    }
+  };
+
+  const handleRemoveAuthor = (index) => {
     setFormData((prev) => ({
       ...prev,
-      [type]: prev[type].filter((_, i) => i !== index),
+      authors: prev.authors.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleRemoveCategory = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      categories: prev.categories.filter((_, i) => i !== index),
     }));
   };
 
@@ -96,7 +153,16 @@ const ProductForm = ({ isEdit = false }) => {
     }
   };
 
-  if (isLoading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
+  if (isLoading || loadingOptions) {
+    return (
+      <Container className="my-5">
+        <div className="text-center">
+          <Spinner animation="border" className="d-block mx-auto" />
+          <p className="mt-3">Loading form options...</p>
+        </div>
+      </Container>
+    );
+  }
 
   return (
     <Container className="my-5">
@@ -110,13 +176,22 @@ const ProductForm = ({ isEdit = false }) => {
             <Col md={6}>
               <Form.Group controlId="title">
                 <Form.Label>Title</Form.Label>
-                <Form.Control name="title" value={formData.title} onChange={handleChange} required />
+                <Form.Control 
+                  name="title" 
+                  value={formData.title} 
+                  onChange={handleChange} 
+                  required 
+                />
               </Form.Group>
             </Col>
             <Col md={6}>
               <Form.Group controlId="isbn">
                 <Form.Label>ISBN</Form.Label>
-                <Form.Control name="isbn" value={formData.isbn} onChange={handleChange} />
+                <Form.Control 
+                  name="isbn" 
+                  value={formData.isbn} 
+                  onChange={handleChange} 
+                />
               </Form.Group>
             </Col>
           </Row>
@@ -124,81 +199,169 @@ const ProductForm = ({ isEdit = false }) => {
           <Row className="mb-3">
             <Col md={6}>
               <Form.Group controlId="publisher_id">
-                <Form.Label>Publisher ID</Form.Label>
-                <Form.Control name="publisher_id" value={formData.publisher_id} onChange={handleChange} />
+                <Form.Label>Publisher</Form.Label>
+                <Form.Select 
+                  name="publisher_id" 
+                  value={formData.publisher_id} 
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select Publisher</option>
+                  {publishers.map((publisher) => (
+                    <option key={publisher.id} value={publisher.id}>
+                      {publisher.name}
+                    </option>
+                  ))}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={6}>
               <Form.Group controlId="publication_date">
                 <Form.Label>Publication Date</Form.Label>
-                <Form.Control type="date" name="publication_date" value={formData.publication_date} onChange={handleChange} />
+                <Form.Control 
+                  type="date" 
+                  name="publication_date" 
+                  value={formData.publication_date} 
+                  onChange={handleChange} 
+                />
               </Form.Group>
             </Col>
           </Row>
 
           <Form.Group controlId="description" className="mb-3">
             <Form.Label>Description</Form.Label>
-            <Form.Control as="textarea" name="description" rows={3} value={formData.description} onChange={handleChange} />
+            <Form.Control 
+              as="textarea" 
+              name="description" 
+              rows={3} 
+              value={formData.description} 
+              onChange={handleChange} 
+            />
           </Form.Group>
 
           <Row className="mb-3">
             <Col md={4}>
               <Form.Group controlId="price">
                 <Form.Label>Price</Form.Label>
-                <Form.Control type="number" name="price" value={formData.price} onChange={handleChange} required />
+                <Form.Control 
+                  type="number" 
+                  name="price" 
+                  value={formData.price} 
+                  onChange={handleChange} 
+                  required 
+                />
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group controlId="stock">
                 <Form.Label>Stock</Form.Label>
-                <Form.Control type="number" name="stock" value={formData.stock} onChange={handleChange} required />
+                <Form.Control 
+                  type="number" 
+                  name="stock" 
+                  value={formData.stock} 
+                  onChange={handleChange} 
+                  required 
+                />
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group controlId="discount">
                 <Form.Label>Discount (%)</Form.Label>
-                <Form.Control type="number" name="discount" value={formData.discount} onChange={handleChange} />
+                <Form.Control 
+                  type="number" 
+                  name="discount" 
+                  value={formData.discount} 
+                  onChange={handleChange} 
+                />
               </Form.Group>
             </Col>
           </Row>
 
           <Form.Group controlId="Image" className="mb-4">
             <Form.Label>Image URL</Form.Label>
-            <Form.Control name="Image" value={formData.Image} onChange={handleChange} />
+            <Form.Control 
+              name="Image" 
+              value={formData.Image} 
+              onChange={handleChange} 
+            />
             {formData.Image && (
-              <img src={formData.Image} alt="Preview" className="mt-3 rounded shadow-sm border w-32 h-auto" />
+              <img 
+                src={formData.Image} 
+                alt="Preview" 
+                className="mt-3 rounded shadow-sm border w-32 h-auto" 
+              />
             )}
           </Form.Group>
 
-          {/* Authors */}
+          {/* Authors Selection */}
           <Form.Group className="mb-4">
             <Form.Label>Authors</Form.Label>
             <InputGroup className="mb-2">
-              <Form.Control placeholder="Add author" value={authorInput} onChange={(e) => setAuthorInput(e.target.value)} />
-              <Button variant="outline-primary" onClick={() => handleAddTag("authors")}>Add</Button>
+              <Form.Select 
+                value={selectedAuthor} 
+                onChange={(e) => setSelectedAuthor(e.target.value)}
+              >
+                <option value="">Select Author</option>
+                {authors.map((author) => (
+                  <option key={author.id} value={author.name}>
+                    {author.name}
+                  </option>
+                ))}
+              </Form.Select>
+              <Button 
+                variant="outline-primary" 
+                onClick={handleAddAuthor}
+                disabled={!selectedAuthor}
+              >
+                <FaPlus />
+              </Button>
             </InputGroup>
             <div className="d-flex flex-wrap gap-2">
               {formData.authors.map((author, i) => (
-                <Badge pill bg="primary" key={i}>
-                  {author}{" "}
-                  <span style={{ cursor: "pointer" }} onClick={() => handleRemoveTag("authors", i)}>×</span>
+                <Badge pill bg="primary" key={i} className="d-flex align-items-center">
+                  {author}
+                  <FaTimes 
+                    className="ms-2" 
+                    style={{ cursor: "pointer" }} 
+                    onClick={() => handleRemoveAuthor(i)}
+                  />
                 </Badge>
               ))}
             </div>
           </Form.Group>
 
-          {/* Categories */}
+          {/* Categories Selection */}
           <Form.Group className="mb-4">
             <Form.Label>Categories</Form.Label>
             <InputGroup className="mb-2">
-              <Form.Control placeholder="Add category" value={categoryInput} onChange={(e) => setCategoryInput(e.target.value)} />
-              <Button variant="outline-success" onClick={() => handleAddTag("categories")}>Add</Button>
+              <Form.Select 
+                value={selectedCategory} 
+                onChange={(e) => setSelectedCategory(e.target.value)}
+              >
+                <option value="">Select Category</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
+              </Form.Select>
+              <Button 
+                variant="outline-success" 
+                onClick={handleAddCategory}
+                disabled={!selectedCategory}
+              >
+                <FaPlus />
+              </Button>
             </InputGroup>
             <div className="d-flex flex-wrap gap-2">
-              {formData.categories.map((cat, i) => (
-                <Badge pill bg="success" key={i}>
-                  {cat}{" "}
-                  <span style={{ cursor: "pointer" }} onClick={() => handleRemoveTag("categories", i)}>×</span>
+              {formData.categories.map((category, i) => (
+                <Badge pill bg="success" key={i} className="d-flex align-items-center">
+                  {category}
+                  <FaTimes 
+                    className="ms-2" 
+                    style={{ cursor: "pointer" }} 
+                    onClick={() => handleRemoveCategory(i)}
+                  />
                 </Badge>
               ))}
             </div>

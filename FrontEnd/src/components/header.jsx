@@ -226,7 +226,7 @@ const Header = () => {
                           <ListItemIcon>
                             <ShoppingBag fontSize="small" />
                           </ListItemIcon>
-                          <ListItemText primary="Products" />
+                          <ListItemText primary="Books" />
                         </MenuItem>
                         <MenuItem
                           component={Link}

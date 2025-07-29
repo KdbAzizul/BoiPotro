@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Form, Button, Row, Col, Table } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import { FaEdit, FaTrash, FaPlus } from "react-icons/fa";
+import { toast } from "react-toastify";
 import {
   useGetProductsQuery,
   useDeleteProductMutation,
@@ -38,8 +39,14 @@ const ProductListScreen = () => {
 
   const deleteHandler = async (id) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
-      await deleteProduct(id);
-      refetch();
+      try {
+        const result = await deleteProduct(id).unwrap();
+        toast.success(result.message || "Product deleted successfully");
+        refetch();
+      } catch (error) {
+        const errorMessage = error?.data?.message || error?.error || "Failed to delete product";
+        toast.error(errorMessage);
+      }
     }
   };
 

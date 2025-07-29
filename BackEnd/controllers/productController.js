@@ -336,6 +336,7 @@ const getProductsById = asyncHandler(async (req, res) => {
         b.discount,
         b.isbn,
         b.publication_date,
+        b.publisher_id,
         COALESCE(ROUND(AVG(r.rating), 1), 0) AS star,
         COUNT(r.id) AS review_count,
         bp.photo_url AS image,
@@ -644,12 +645,17 @@ const createProduct = asyncHandler(async (req, res) => {
       discount,
       isbn,
       publication_date,
-      publisher_name,
-      image_url,
+      publisher_id,
+      Image,
       authors = [],
       categories = [],  
-      
     } = req.body;
+
+    // Validate required fields
+    if (!title || !price || !stock) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: "Title, price, and stock are required" });
+    }
 
     // Validate publisher exists
     const publisherExists = await client.query(
@@ -663,26 +669,106 @@ const createProduct = asyncHandler(async (req, res) => {
     }
 
     // Create the book
-    const result = await client.query(
+    const bookResult = await client.query(
       `INSERT INTO "BOIPOTRO"."books"
        (title, description, price, stock, discount, isbn, publication_date, publisher_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
       [
         title,
-        description,
+        description || null,
         price,
         stock,
-        discount,
-        isbn,
-        publication_date,
+        discount || 0,
+        isbn || null,
+        publication_date || null,
         publisher_id,
-      
       ]
     );
 
+    const bookId = bookResult.rows[0].id;
+
+    // Insert image if provided
+    if (Image) {
+      await client.query(
+        `INSERT INTO "BOIPOTRO"."book_photos" (book_id, photo_url, photo_order)
+         VALUES ($1, $2, $3)`,
+        [bookId, Image, 1]
+      );
+    }
+
+    // Insert authors
+    if (authors && authors.length > 0) {
+      for (const authorName of authors) {
+        // Find author by name
+        const authorResult = await client.query(
+          `SELECT id FROM "BOIPOTRO"."authors" WHERE name = $1`,
+          [authorName]
+        );
+
+        if (authorResult.rows.length > 0) {
+          const authorId = authorResult.rows[0].id;
+          // Insert book-author relationship
+          await client.query(
+            `INSERT INTO "BOIPOTRO"."bookauthors" (book_id, author_id)
+             VALUES ($1, $2)`,
+            [bookId, authorId]
+          );
+        }
+      }
+    }
+
+    // Insert categories
+    if (categories && categories.length > 0) {
+      for (const categoryName of categories) {
+        // Find category by name
+        const categoryResult = await client.query(
+          `SELECT id FROM "BOIPOTRO"."categories" WHERE name = $1`,
+          [categoryName]
+        );
+
+        if (categoryResult.rows.length > 0) {
+          const categoryId = categoryResult.rows[0].id;
+          // Insert book-category relationship
+          await client.query(
+            `INSERT INTO "BOIPOTRO"."book_categories" (book_id, category_id)
+             VALUES ($1, $2)`,
+            [bookId, categoryId]
+          );
+        }
+      }
+    }
+
     await client.query('COMMIT');
-    res.status(201).json(result.rows[0]);
+    
+    // Fetch the complete book data to return
+    const completeBookResult = await client.query(
+      `SELECT 
+        b.id,
+        b.title,
+        b.description,
+        b.price,
+        b.stock,
+        b.discount,
+        b.isbn,
+        b.publication_date,
+        bp.photo_url AS image,
+        ARRAY_AGG(DISTINCT a.name) AS authors,
+        ARRAY_AGG(DISTINCT c.name) AS categories,
+        p.name AS publisher
+       FROM "BOIPOTRO"."books" b
+       LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.book_id AND bp.photo_order = 1
+       LEFT JOIN "BOIPOTRO"."bookauthors" ba ON b.id = ba.book_id
+       LEFT JOIN "BOIPOTRO"."authors" a ON ba.author_id = a.id
+       LEFT JOIN "BOIPOTRO"."book_categories" bc ON b.id = bc.book_id
+       LEFT JOIN "BOIPOTRO"."categories" c ON bc.category_id = c.id
+       LEFT JOIN "BOIPOTRO"."publishers" p ON b.publisher_id = p.id
+       WHERE b.id = $1
+       GROUP BY b.id, bp.photo_url, p.name`,
+      [bookId]
+    );
+
+    res.status(201).json(completeBookResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error in createProduct:', error);
@@ -726,6 +812,9 @@ const updateProduct = asyncHandler(async (req, res) => {
       isbn = book.rows[0].isbn,
       publication_date = book.rows[0].publication_date,
       publisher_id = book.rows[0].publisher_id,
+      Image,
+      authors = [],
+      categories = [],
     } = req.body;
 
     // Validate publisher if changed
@@ -747,7 +836,7 @@ const updateProduct = asyncHandler(async (req, res) => {
        SET title=$1, description=$2, price=$3, stock=$4,
            discount=$5, isbn=$6, publication_date=$7, publisher_id=$8
        WHERE id=$9 
-       RETURNING *`,
+       RETURNING id`,
       [
         title,
         description,
@@ -761,8 +850,110 @@ const updateProduct = asyncHandler(async (req, res) => {
       ]
     );
 
+    // Update image if provided
+    if (Image !== undefined) {
+      // Delete existing image
+      await client.query(
+        `DELETE FROM "BOIPOTRO"."book_photos" WHERE book_id = $1`,
+        [id]
+      );
+      
+      // Insert new image if provided
+      if (Image) {
+        await client.query(
+          `INSERT INTO "BOIPOTRO"."book_photos" (book_id, photo_url, photo_order)
+           VALUES ($1, $2, $3)`,
+          [id, Image, 1]
+        );
+      }
+    }
+
+    // Update authors if provided
+    if (authors !== undefined) {
+      // Delete existing author relationships
+      await client.query(
+        `DELETE FROM "BOIPOTRO"."bookauthors" WHERE book_id = $1`,
+        [id]
+      );
+      
+      // Insert new author relationships
+      if (authors && authors.length > 0) {
+        for (const authorName of authors) {
+          const authorResult = await client.query(
+            `SELECT id FROM "BOIPOTRO"."authors" WHERE name = $1`,
+            [authorName]
+          );
+
+          if (authorResult.rows.length > 0) {
+            const authorId = authorResult.rows[0].id;
+            await client.query(
+              `INSERT INTO "BOIPOTRO"."bookauthors" (book_id, author_id)
+               VALUES ($1, $2)`,
+              [id, authorId]
+            );
+          }
+        }
+      }
+    }
+
+    // Update categories if provided
+    if (categories !== undefined) {
+      // Delete existing category relationships
+      await client.query(
+        `DELETE FROM "BOIPOTRO"."book_categories" WHERE book_id = $1`,
+        [id]
+      );
+      
+      // Insert new category relationships
+      if (categories && categories.length > 0) {
+        for (const categoryName of categories) {
+          const categoryResult = await client.query(
+            `SELECT id FROM "BOIPOTRO"."categories" WHERE name = $1`,
+            [categoryName]
+          );
+
+          if (categoryResult.rows.length > 0) {
+            const categoryId = categoryResult.rows[0].id;
+            await client.query(
+              `INSERT INTO "BOIPOTRO"."book_categories" (book_id, category_id)
+               VALUES ($1, $2)`,
+              [id, categoryId]
+            );
+          }
+        }
+      }
+    }
+
     await client.query('COMMIT');
-    res.json(updated.rows[0]);
+    
+    // Fetch the complete updated book data to return
+    const completeBookResult = await client.query(
+      `SELECT 
+        b.id,
+        b.title,
+        b.description,
+        b.price,
+        b.stock,
+        b.discount,
+        b.isbn,
+        b.publication_date,
+        bp.photo_url AS image,
+        ARRAY_AGG(DISTINCT a.name) AS authors,
+        ARRAY_AGG(DISTINCT c.name) AS categories,
+        p.name AS publisher
+       FROM "BOIPOTRO"."books" b
+       LEFT JOIN "BOIPOTRO"."book_photos" bp ON b.id = bp.book_id AND bp.photo_order = 1
+       LEFT JOIN "BOIPOTRO"."bookauthors" ba ON b.id = ba.book_id
+       LEFT JOIN "BOIPOTRO"."authors" a ON ba.author_id = a.id
+       LEFT JOIN "BOIPOTRO"."book_categories" bc ON b.id = bc.book_id
+       LEFT JOIN "BOIPOTRO"."categories" c ON bc.category_id = c.id
+       LEFT JOIN "BOIPOTRO"."publishers" p ON b.publisher_id = p.id
+       WHERE b.id = $1
+       GROUP BY b.id, bp.photo_url, p.name`,
+      [id]
+    );
+
+    res.json(completeBookResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error in updateProduct:', error);
@@ -797,16 +988,29 @@ const deleteProduct = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Book not found" });
     }
 
-    // Check for related records (optional, depending on your foreign key constraints)
+    // Check if book is in any user's cart (picked_items)
+    const inCart = await client.query(
+      `SELECT 1 FROM "BOIPOTRO"."picked_items" WHERE book_id = $1 LIMIT 1`,
+      [id]
+    );
+
+    if (inCart.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        message: "Cannot delete book that is currently in user carts" 
+      });
+    }
+
+    // Check if book has been ordered (cartitems)
     const hasOrders = await client.query(
-      `SELECT 1 FROM "BOIPOTRO"."order_items" WHERE book_id=$1 LIMIT 1`,
+      `SELECT 1 FROM "BOIPOTRO"."cartitems" WHERE book_id = $1 LIMIT 1`,
       [id]
     );
 
     if (hasOrders.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ 
-        message: "Cannot delete book with existing orders" 
+        message: "Cannot delete book that has been ordered" 
       });
     }
 
