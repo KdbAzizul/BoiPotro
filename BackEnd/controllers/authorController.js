@@ -124,12 +124,12 @@ const createAuthor = asyncHandler(async (req, res) => {
       throw new Error('Author already exists');
     }
 
-    // Create new author
+    // Create new author - let PostgreSQL auto-generate the ID
     const result = await client.query(
       `INSERT INTO "BOIPOTRO"."authors" (name, bio)
        VALUES ($1, $2)
        RETURNING id, name, bio`,
-      [name, bio]
+      [name, bio || null]
     );
 
     await client.query('COMMIT');
@@ -137,10 +137,24 @@ const createAuthor = asyncHandler(async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error creating author:', error);
-    res.status(error.message.includes('required') || error.message.includes('exists') ? 400 : 500).json({
-      message: error.message || 'Failed to create author',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    
+    // Handle specific database errors
+    if (error.code === '23505') {
+      res.status(400).json({
+        message: 'Author already exists with this name',
+        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    } else if (error.message.includes('required') || error.message.includes('exists')) {
+      res.status(400).json({
+        message: error.message,
+        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    } else {
+      res.status(500).json({
+        message: 'Failed to create author',
+        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
   } finally {
     client.release();
   }

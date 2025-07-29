@@ -15,7 +15,7 @@ import {
   useMediaQuery,
   ListItemIcon,
   ListItemText,
-  Divider
+  Divider,
 } from "@mui/material";
 import {
   ShoppingCart,
@@ -26,7 +26,7 @@ import {
   People,
   ShoppingBag,
   BarChart,
-  LocalOffer
+  LocalOffer,
 } from "@mui/icons-material";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
@@ -39,19 +39,19 @@ import { apiSlice } from "../slices/apiSlice";
 
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
-  boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+  boxShadow: "0 2px 4px rgba(0,0,0,0.08)",
 }));
 
 const LogoText = styled(Typography)(({ theme }) => ({
   color: theme.palette.primary.main,
-  fontFamily: 'Merriweather, serif',
+  fontFamily: "Merriweather, serif",
   fontWeight: 700,
-  fontSize: '1.5rem',
-  textDecoration: 'none',
+  fontSize: "1.5rem",
+  textDecoration: "none",
 }));
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
-  '& .MuiBadge-badge': {
+  "& .MuiBadge-badge": {
     backgroundColor: theme.palette.error.main,
     color: theme.palette.error.contrastText,
   },
@@ -59,10 +59,10 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 
 const Header = () => {
   const { keyword } = useParams();
-  const { data = {}, refetch } = useGetCartQuery(keyword || '');
+  const { data = {}, refetch } = useGetCartQuery(keyword || "");
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
   const [adminMenuAnchor, setAdminMenuAnchor] = useState(null);
@@ -94,18 +94,20 @@ const Header = () => {
     }
   };
 
-  const handleMobileMenuOpen = (event) => setMobileMenuAnchor(event.currentTarget);
+  const handleMobileMenuOpen = (event) =>
+    setMobileMenuAnchor(event.currentTarget);
   const handleMobileMenuClose = () => setMobileMenuAnchor(null);
   const handleUserMenuOpen = (event) => setUserMenuAnchor(event.currentTarget);
   const handleUserMenuClose = () => setUserMenuAnchor(null);
-  const handleAdminMenuOpen = (event) => setAdminMenuAnchor(event.currentTarget);
+  const handleAdminMenuOpen = (event) =>
+    setAdminMenuAnchor(event.currentTarget);
   const handleAdminMenuClose = () => setAdminMenuAnchor(null);
 
   return (
     <StyledAppBar position="sticky">
       <Container maxWidth="lg">
-        <Toolbar disableGutters sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Toolbar disableGutters sx={{ justifyContent: "space-between" }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
             {isMobile && (
               <IconButton
                 color="primary"
@@ -116,19 +118,21 @@ const Header = () => {
                 <MenuIcon />
               </IconButton>
             )}
-            
-            <Link to="/" style={{ textDecoration: 'none' }}>
+
+            <Link to="/" style={{ textDecoration: "none" }}>
               <LogoText variant="h6">BoiPotro</LogoText>
             </Link>
           </Box>
 
           {!isMobile && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <SearchBox />
-              
-              <Link to="/cart" style={{ textDecoration: 'none' }}>
+
+              <Link to="/cart" style={{ textDecoration: "none" }}>
                 <IconButton color="primary">
-                  <StyledBadge badgeContent={cartItems.reduce((a, c) => a + c.quantity, 0)}>
+                  <StyledBadge
+                    badgeContent={cartItems.reduce((a, c) => a + c.quantity, 0)}
+                  >
                     <ShoppingCart />
                   </StyledBadge>
                 </IconButton>
@@ -140,11 +144,11 @@ const Header = () => {
                     color="primary"
                     onClick={handleUserMenuOpen}
                     startIcon={
-                      <Avatar 
-                        sx={{ 
-                          width: 32, 
-                          height: 32, 
-                          bgcolor: theme.palette.primary.main 
+                      <Avatar
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          bgcolor: theme.palette.primary.main,
                         }}
                       >
                         {userInfo.name[0].toUpperCase()}
@@ -160,21 +164,30 @@ const Header = () => {
                     PaperProps={{
                       elevation: 0,
                       sx: {
-                        overflow: 'visible',
-                        filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+                        overflow: "visible",
+                        filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.32))",
                         mt: 1.5,
                         width: 200,
                       },
                     }}
                   >
-                    <MenuItem component={Link} to="/profile" onClick={handleUserMenuClose}>
+                    <MenuItem
+                      component={Link}
+                      to="/profile"
+                      onClick={handleUserMenuClose}
+                    >
                       <ListItemIcon>
                         <Person fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary="Profile" />
                     </MenuItem>
                     <Divider />
-                    <MenuItem onClick={() => { handleUserMenuClose(); logoutHandler(); }}>
+                    <MenuItem
+                      onClick={() => {
+                        handleUserMenuClose();
+                        logoutHandler();
+                      }}
+                    >
                       <ListItemIcon>
                         <Logout fontSize="small" />
                       </ListItemIcon>
@@ -198,42 +211,73 @@ const Header = () => {
                         PaperProps={{
                           elevation: 0,
                           sx: {
-                            overflow: 'visible',
-                            filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+                            overflow: "visible",
+                            filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.32))",
                             mt: 1.5,
                             width: 200,
                           },
                         }}
                       >
-                        <MenuItem component={Link} to="/admin/productlist" onClick={handleAdminMenuClose}>
+                        <MenuItem
+                          component={Link}
+                          to="/admin/productlist"
+                          onClick={handleAdminMenuClose}
+                        >
                           <ListItemIcon>
                             <ShoppingBag fontSize="small" />
                           </ListItemIcon>
                           <ListItemText primary="Products" />
                         </MenuItem>
-                        <MenuItem component={Link} to="/admin/userlist" onClick={handleAdminMenuClose}>
+                        <MenuItem
+                          component={Link}
+                          to="/admin/userlist"
+                          onClick={handleAdminMenuClose}
+                        >
                           <ListItemIcon>
                             <People fontSize="small" />
                           </ListItemIcon>
                           <ListItemText primary="Users" />
                         </MenuItem>
-                        <MenuItem component={Link} to="/admin/orderlist" onClick={handleAdminMenuClose}>
+                        <MenuItem
+                          component={Link}
+                          to="/admin/orderlist"
+                          onClick={handleAdminMenuClose}
+                        >
                           <ListItemIcon>
                             <ShoppingCart fontSize="small" />
                           </ListItemIcon>
                           <ListItemText primary="Orders" />
                         </MenuItem>
-                        <MenuItem component={Link} to="/admin/dashboard" onClick={handleAdminMenuClose}>
+                        <MenuItem
+                          component={Link}
+                          to="/admin/dashboard"
+                          onClick={handleAdminMenuClose}
+                        >
                           <ListItemIcon>
                             <BarChart fontSize="small" />
                           </ListItemIcon>
                           <ListItemText primary="Statistics" />
                         </MenuItem>
-                        <MenuItem component={Link} to="/admin/coupons" onClick={handleAdminMenuClose}>
+                        <MenuItem
+                          component={Link}
+                          to="/admin/coupons"
+                          onClick={handleAdminMenuClose}
+                        >
                           <ListItemIcon>
                             <LocalOffer fontSize="small" />
                           </ListItemIcon>
                           <ListItemText primary="Coupons" />
+                        </MenuItem>
+
+                        <MenuItem
+                          component={Link}
+                          to="/admin/authors"
+                          onClick={handleAdminMenuClose}
+                        >
+                          <ListItemIcon>
+                            <LocalOffer fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary="Authors" />
                         </MenuItem>
                       </Menu>
                     </>
@@ -263,11 +307,11 @@ const Header = () => {
         PaperProps={{
           elevation: 0,
           sx: {
-            width: '100%',
-            maxWidth: '320px',
+            width: "100%",
+            maxWidth: "320px",
             mt: 1.5,
-            overflow: 'visible',
-            filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+            overflow: "visible",
+            filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.32))",
           },
         }}
       >
@@ -276,60 +320,102 @@ const Header = () => {
         </Box>
         <MenuItem component={Link} to="/cart" onClick={handleMobileMenuClose}>
           <ListItemIcon>
-            <StyledBadge badgeContent={cartItems.reduce((a, c) => a + c.quantity, 0)}>
+            <StyledBadge
+              badgeContent={cartItems.reduce((a, c) => a + c.quantity, 0)}
+            >
               <ShoppingCart color="primary" />
             </StyledBadge>
           </ListItemIcon>
           <ListItemText primary="Cart" />
         </MenuItem>
-        
+
         {userInfo ? (
           <>
-            <MenuItem component={Link} to="/profile" onClick={handleMobileMenuClose}>
+            <MenuItem
+              component={Link}
+              to="/profile"
+              onClick={handleMobileMenuClose}
+            >
               <ListItemIcon>
                 <Person color="primary" />
               </ListItemIcon>
               <ListItemText primary="Profile" />
             </MenuItem>
-            
+
             {userInfo.isAdmin && (
               <>
                 <Divider textAlign="left">Admin</Divider>
-                <MenuItem component={Link} to="/admin/productlist" onClick={handleMobileMenuClose}>
+                <MenuItem
+                  component={Link}
+                  to="/admin/productlist"
+                  onClick={handleMobileMenuClose}
+                >
                   <ListItemIcon>
                     <ShoppingBag color="primary" />
                   </ListItemIcon>
                   <ListItemText primary="Products" />
                 </MenuItem>
-                <MenuItem component={Link} to="/admin/userlist" onClick={handleMobileMenuClose}>
+                <MenuItem
+                  component={Link}
+                  to="/admin/userlist"
+                  onClick={handleMobileMenuClose}
+                >
                   <ListItemIcon>
                     <People color="primary" />
                   </ListItemIcon>
                   <ListItemText primary="Users" />
                 </MenuItem>
-                <MenuItem component={Link} to="/admin/orderlist" onClick={handleMobileMenuClose}>
+                <MenuItem
+                  component={Link}
+                  to="/admin/orderlist"
+                  onClick={handleMobileMenuClose}
+                >
                   <ListItemIcon>
                     <ShoppingCart color="primary" />
                   </ListItemIcon>
                   <ListItemText primary="Orders" />
                 </MenuItem>
-                <MenuItem component={Link} to="/admin/dashboard" onClick={handleMobileMenuClose}>
+                <MenuItem
+                  component={Link}
+                  to="/admin/dashboard"
+                  onClick={handleMobileMenuClose}
+                >
                   <ListItemIcon>
                     <BarChart color="primary" />
                   </ListItemIcon>
                   <ListItemText primary="Statistics" />
                 </MenuItem>
-                <MenuItem component={Link} to="/admin/coupons" onClick={handleMobileMenuClose}>
+                <MenuItem
+                  component={Link}
+                  to="/admin/coupons"
+                  onClick={handleMobileMenuClose}
+                >
                   <ListItemIcon>
                     <LocalOffer color="primary" />
                   </ListItemIcon>
                   <ListItemText primary="Coupons" />
                 </MenuItem>
+
+                <MenuItem
+                  component={Link}
+                  to="/admin/authors"
+                  onClick={handleAdminMenuClose}
+                >
+                  <ListItemIcon>
+                    <LocalOffer fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="Authors" />
+                </MenuItem>
               </>
             )}
-            
+
             <Divider />
-            <MenuItem onClick={() => { handleMobileMenuClose(); logoutHandler(); }}>
+            <MenuItem
+              onClick={() => {
+                handleMobileMenuClose();
+                logoutHandler();
+              }}
+            >
               <ListItemIcon>
                 <Logout color="primary" />
               </ListItemIcon>
@@ -337,7 +423,11 @@ const Header = () => {
             </MenuItem>
           </>
         ) : (
-          <MenuItem component={Link} to="/login" onClick={handleMobileMenuClose}>
+          <MenuItem
+            component={Link}
+            to="/login"
+            onClick={handleMobileMenuClose}
+          >
             <ListItemIcon>
               <Person color="primary" />
             </ListItemIcon>

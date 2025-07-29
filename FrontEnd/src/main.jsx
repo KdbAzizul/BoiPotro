@@ -28,6 +28,10 @@ import ProductForm from "./screens/admin/ProductFormScreen.jsx";
 import UserListScreen from "./screens/admin/UserListScreen.jsx";
 import AdminDashboardScreen from "./screens/admin/AdminDashboardScreen.jsx";
 import AssignCouponScreen from "./screens/admin/AssignCouponScreen.jsx";
+import AdminAuthorList from "./screens/author/AdminAuthorList.jsx";
+import AuthorForm from "./screens/author/AuthorForm.jsx";
+import AuthorDetailScreen from "./screens/author/AuthorDetailScreen.jsx";
+
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -54,6 +58,15 @@ const router = createBrowserRouter(
         <Route path="/admin/orderlist" element={<OrderListScreen />} />
         <Route path="/admin/userlist" element={<UserListScreen />} />
         <Route path="/admin/productlist" element={<ProductListScreen />} />
+
+
+        <Route path="/admin/authors" element={<AdminAuthorList />} />
+        <Route path="/admin/authors/create" element={<AuthorForm />} />
+        <Route path="/admin/authors/:id" element={<AuthorDetailScreen />} />
+        <Route path="/admin/authors/edit/:id" element={<AuthorForm isEdit={true} />} />
+        
+
+
         <Route path="/admin/product/create" element={<ProductForm />} />
         <Route path="/admin/dashboard" element={<AdminDashboardScreen />} />
         <Route
