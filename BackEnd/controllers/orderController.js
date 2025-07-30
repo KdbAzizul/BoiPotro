@@ -11,14 +11,16 @@ import { calculateCartPrices } from "../utils/calculateCartPrices.js";
 const validateCoupon = asyncHandler(async (req, res) => {
   const { code } = req.body;
   if (!code) {
-    return res.status(400).json({ valid: false, error: "Coupon code is required" });
+    return res
+      .status(400)
+      .json({ valid: false, error: "Coupon code is required" });
   }
-  
+
   const user_id = req.user.id;
   const client = await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Get cart items
     const result = await client.query(
@@ -54,7 +56,10 @@ const validateCoupon = asyncHandler(async (req, res) => {
     const minOrderAmount = parseFloat(coupon.min_order_amount) || 0;
 
     // Validate date
-    if (now < new Date(coupon.valid_from) || now > new Date(coupon.valid_until)) {
+    if (
+      now < new Date(coupon.valid_from) ||
+      now > new Date(coupon.valid_until)
+    ) {
       throw new Error("Coupon expired");
     }
 
@@ -80,7 +85,7 @@ const validateCoupon = asyncHandler(async (req, res) => {
       throw new Error("Coupon usage limit reached");
     }
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     const percent = parseFloat(coupon.percentage_discount) || 0;
     const fixed = parseFloat(coupon.amount_discount) || 0;
@@ -101,18 +106,16 @@ const validateCoupon = asyncHandler(async (req, res) => {
       new_total: newTotal,
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     res.status(400).json({
       valid: false,
       error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   } finally {
     client.release();
   }
 });
-
-
 
 export const createOrder = async ({
   user_id,
@@ -169,16 +172,52 @@ export const createOrder = async ({
     for (const item of cartItems) {
       const bookId = parseInt(item.id, 10);
       const quantity = parseInt(item.quantity, 10);
+
       if (isNaN(bookId) || isNaN(quantity)) {
         throw new Error("Invalid bookId or quantity in cartItems");
       }
 
+      // Lock the book row to prevent race condition
+      const stockRes = await client.query(
+        `SELECT stock FROM "BOIPOTRO"."books" WHERE id = $1 FOR UPDATE`,
+        [bookId]
+      );
+
+      if (stockRes.rowCount === 0) {
+        throw new Error(`Book with ID ${bookId} not found`);
+      }
+
+      const currentStock = parseInt(stockRes.rows[0].stock, 10);
+      if (currentStock < quantity) {
+        throw new Error(`Not enough stock for book ID ${bookId}`);
+      }
+
+      // Safe to update now
+      await client.query(
+        `UPDATE "BOIPOTRO"."books" SET stock = stock - $1 WHERE id = $2`,
+        [quantity, bookId]
+      );
+
       await client.query(
         `INSERT INTO "BOIPOTRO"."cartitems" (cart_id, book_id, quantity)
-         VALUES ($1, $2, $3)`,
+     VALUES ($1, $2, $3)`,
         [cart_id, bookId, quantity]
       );
     }
+
+    // for (const item of cartItems) {
+    //   const bookId = parseInt(item.id, 10);
+    //   const quantity = parseInt(item.quantity, 10);
+    //   if (isNaN(bookId) || isNaN(quantity)) {
+    //     throw new Error("Invalid bookId or quantity in cartItems");
+    //   }
+
+    //   await client.query(
+    //     `INSERT INTO "BOIPOTRO"."cartitems" (cart_id, book_id, quantity)
+    //      VALUES ($1, $2, $3)`,
+    //     [cart_id, bookId, quantity]
+    //   );
+    // }
 
     await client.query(
       `UPDATE "BOIPOTRO"."user_coupons" SET used_count = used_count + 1
@@ -206,10 +245,15 @@ export const createOrder = async ({
 // @route      POST /api/orders
 // @access     private
 
-
-
- const addOrderItems = asyncHandler(async (req, res) => {
-  const { cartItems, shippingAddress, paymentMethod, couponName, totalPrice, is_paid } = req.body;
+const addOrderItems = asyncHandler(async (req, res) => {
+  const {
+    cartItems,
+    shippingAddress,
+    paymentMethod,
+    couponName,
+    totalPrice,
+    is_paid,
+  } = req.body;
 
   const user_id = req.user.id;
   let tran_id = req.body.tran_id || uuidv4();
@@ -290,7 +334,7 @@ export const createOrder = async ({
 //     // Insert into cart
 //     const cartRes = await client.query(
 //       `INSERT INTO "BOIPOTRO"."cart" (
-//          user_id, coupon_id, total_price, total_item, 
+//          user_id, coupon_id, total_price, total_item,
 //          shipping_address, payment_method,tran_id,is_paid,state_id
 //        ) VALUES ($1, $2, $3, $4, $5, $6, $7,$8, 1)
 //        RETURNING id`,
@@ -351,9 +395,9 @@ export const createOrder = async ({
 const getMyOrders = asyncHandler(async (req, res) => {
   const user_id = req.user.id;
   const client = await pool.connect();
-  
+
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // First verify the user exists
     const userCheck = await client.query(
@@ -392,14 +436,14 @@ const getMyOrders = asyncHandler(async (req, res) => {
       })
     );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
     res.status(200).json(enrichedOrders);
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     console.error("Failed to fetch user's orders:", error);
-    res.status(error.message === 'User not found' ? 404 : 500).json({ 
+    res.status(error.message === "User not found" ? 404 : 500).json({
       error: error.message || "Could not fetch orders",
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   } finally {
     client.release();
@@ -421,7 +465,7 @@ const getOrderById = asyncHandler(async (req, res) => {
   const client = await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Prepare the base query
     const baseQuery = `
@@ -443,7 +487,9 @@ const getOrderById = asyncHandler(async (req, res) => {
     );
 
     if (cartRes.rowCount === 0) {
-      throw new Error(isAdmin ? "Order not found" : "Order not found or access denied");
+      throw new Error(
+        isAdmin ? "Order not found" : "Order not found or access denied"
+      );
     }
 
     // Get order items with full details
@@ -458,26 +504,30 @@ const getOrderById = asyncHandler(async (req, res) => {
     );
 
     // Calculate item totals
-    const items = itemsRes.rows.map(item => ({
+    const items = itemsRes.rows.map((item) => ({
       ...item,
       total: parseFloat(item.price) * parseInt(item.quantity),
-      final_price: parseFloat(item.price) * (1 - parseFloat(item.discount || 0))
+      final_price:
+        parseFloat(item.price) * (1 - parseFloat(item.discount || 0)),
     }));
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     res.status(200).json({
       ...cartRes.rows[0],
       items,
-      total_items: items.reduce((sum, item) => sum + parseInt(item.quantity), 0),
-      items_total: items.reduce((sum, item) => sum + item.total, 0)
+      total_items: items.reduce(
+        (sum, item) => sum + parseInt(item.quantity),
+        0
+      ),
+      items_total: items.reduce((sum, item) => sum + item.total, 0),
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     console.error("Failed to fetch order:", error);
     res.status(error.message.includes("not found") ? 404 : 500).json({
       error: error.message || "Could not fetch order details",
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   } finally {
     client.release();
@@ -570,22 +620,30 @@ const cancelOrder = asyncHandler(async (req, res) => {
 
     // Check if user owns this order
     if (order.user_id !== userId) {
-      return res.status(403).json({ error: "Not authorized to cancel this order" });
+      return res
+        .status(403)
+        .json({ error: "Not authorized to cancel this order" });
     }
 
     // Check if order is already cancelled
-    if (order.state_name === 'cancelled') {
+    if (order.state_name === "cancelled") {
       return res.status(400).json({ error: "Order is already cancelled" });
     }
 
     // Check if order is paid or is SSLCommerz
-    if (order.is_paid || order.payment_method === 'SSLCommerz') {
-      return res.status(400).json({ error: "Cannot cancel paid orders or orders paid with SSLCommerz" });
+    if (order.is_paid || order.payment_method === "SSLCommerz") {
+      return res
+        .status(400)
+        .json({
+          error: "Cannot cancel paid orders or orders paid with SSLCommerz",
+        });
     }
 
     // Check if order is in cancellable states (pending or processing)
-    if (!['pending', 'processing'].includes(order.state_name)) {
-      return res.status(400).json({ error: "Order cannot be cancelled in current state" });
+    if (!["pending", "processing"].includes(order.state_name)) {
+      return res
+        .status(400)
+        .json({ error: "Order cannot be cancelled in current state" });
     }
 
     // Check if order is within 6 hours
@@ -595,7 +653,11 @@ const cancelOrder = asyncHandler(async (req, res) => {
     const sixHoursInMs = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
     if (timeDifference > sixHoursInMs) {
-      return res.status(400).json({ error: "Order can only be cancelled within 6 hours of placement" });
+      return res
+        .status(400)
+        .json({
+          error: "Order can only be cancelled within 6 hours of placement",
+        });
     }
 
     // Get cancelled state ID
@@ -651,7 +713,7 @@ const updateOrderState = asyncHandler(async (req, res) => {
   const client = await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Check if order exists
     const orderResult = await client.query(
@@ -680,11 +742,11 @@ const updateOrderState = asyncHandler(async (req, res) => {
     const currentState = orderResult.rows[0].current_state;
 
     // Validate state transition
-    if (currentState === 'cancelled' && state !== 'cancelled') {
+    if (currentState === "cancelled" && state !== "cancelled") {
       throw new Error("Cannot change state of cancelled order");
     }
 
-    if (currentState === 'delivered' && state !== 'delivered') {
+    if (currentState === "delivered" && state !== "delivered") {
       throw new Error("Cannot change state of delivered order");
     }
 
@@ -694,19 +756,19 @@ const updateOrderState = asyncHandler(async (req, res) => {
       [stateId, cartId]
     );
 
-    await client.query('COMMIT');
-    res.json({ 
+    await client.query("COMMIT");
+    res.json({
       message: `Order ${cartId} state updated from ${currentState} to ${state}`,
       orderId: cartId,
       previousState: currentState,
-      newState: state
+      newState: state,
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     console.error("Failed to update order state:", error);
     res.status(error.message.includes("not found") ? 404 : 400).json({
       error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   } finally {
     client.release();
@@ -723,7 +785,7 @@ const getOrders = asyncHandler(async (req, res) => {
 
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Get all orders with user and state info
     const ordersRes = await client.query(
@@ -756,21 +818,19 @@ const getOrders = asyncHandler(async (req, res) => {
       })
     );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
     res.status(200).json(enrichedOrders);
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     console.error("Failed to fetch all orders:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Could not fetch all orders",
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   } finally {
     client.release();
   }
 });
-
-
 
 export {
   validateCoupon,
